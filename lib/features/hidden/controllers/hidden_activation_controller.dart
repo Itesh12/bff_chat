@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:get/get.dart';
 import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
@@ -15,10 +16,40 @@ class HiddenActivationController extends GetxController {
   final RxBool isConfirmingMode = false.obs;
   final RxString errorMessage = ''.obs;
 
+  final RxInt failedAttempts = 0.obs;
+  final Rxn<DateTime> cooldownUntil = Rxn<DateTime>();
+  final RxInt cooldownRemaining = 0.obs;
+  Timer? _cooldownTimer;
+
+  bool get isCooldownActive => cooldownRemaining.value > 0;
+
+  void _startCooldownTimer(int seconds) {
+    _cooldownTimer?.cancel();
+    cooldownRemaining.value = seconds;
+    cooldownUntil.value = DateTime.now().add(Duration(seconds: seconds));
+
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (cooldownRemaining.value > 1) {
+        cooldownRemaining.value--;
+      } else {
+        cooldownRemaining.value = 0;
+        cooldownUntil.value = null;
+        errorMessage.value = '';
+        timer.cancel();
+      }
+    });
+  }
+
   @override
   void onInit() {
     super.onInit();
     _checkSetupStatus();
+  }
+
+  @override
+  void onClose() {
+    _cooldownTimer?.cancel();
+    super.onClose();
   }
 
   Future<void> _checkSetupStatus() async {
@@ -26,6 +57,7 @@ class HiddenActivationController extends GetxController {
   }
 
   void appendDigit(String digit) {
+    if (isCooldownActive) return;
     errorMessage.value = '';
     if (isConfirmingMode.value) {
       if (confirmInput.value.length < 4) {
@@ -39,6 +71,7 @@ class HiddenActivationController extends GetxController {
   }
 
   void backspace() {
+    if (isCooldownActive) return;
     errorMessage.value = '';
     if (isConfirmingMode.value) {
       if (confirmInput.value.isNotEmpty) {
@@ -59,6 +92,7 @@ class HiddenActivationController extends GetxController {
   }
 
   Future<void> submit() async {
+    if (isCooldownActive) return;
     final pin = pinInput.value;
     if (pin.length != 4) {
       errorMessage.value = 'PIN must be exactly 4 digits';
@@ -83,6 +117,8 @@ class HiddenActivationController extends GetxController {
           await _vaultService.setupVault(pin);
           final success = await _vaultService.unlockVault(pin);
           if (success) {
+            failedAttempts.value = 0;
+            cooldownUntil.value = null;
             _sessionService.activateSession();
             Get.offAllNamed(AppRoutes.hiddenHome);
           } else {
@@ -97,14 +133,28 @@ class HiddenActivationController extends GetxController {
       try {
         final success = await _vaultService.unlockVault(pin);
         if (success) {
+          failedAttempts.value = 0;
+          cooldownUntil.value = null;
           _sessionService.activateSession();
           Get.offAllNamed(AppRoutes.hiddenHome);
         } else {
-          errorMessage.value = 'Incorrect PIN';
+          failedAttempts.value++;
+          if (failedAttempts.value >= 5) {
+            _startCooldownTimer(30);
+            errorMessage.value = 'Too many attempts. Cooldown active.';
+          } else {
+            errorMessage.value = 'Incorrect PIN';
+          }
           pinInput.value = '';
         }
       } catch (e) {
-        errorMessage.value = 'Decryption failed';
+        failedAttempts.value++;
+        if (failedAttempts.value >= 5) {
+          _startCooldownTimer(30);
+          errorMessage.value = 'Too many attempts. Cooldown active.';
+        } else {
+          errorMessage.value = 'Decryption failed';
+        }
         pinInput.value = '';
       }
     }

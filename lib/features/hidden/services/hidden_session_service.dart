@@ -54,7 +54,7 @@ class HiddenSessionService extends GetxService with WidgetsBindingObserver {
 
       // Auto-redirect out of hidden vault routes on lock
       final currentRoute = Get.currentRoute;
-      if (currentRoute == AppRoutes.hiddenHome || currentRoute == AppRoutes.hiddenPin) {
+      if (currentRoute.startsWith('/hidden')) {
         Get.offAllNamed(AppRoutes.notes);
         Get.delete<HiddenHomeController>(force: true);
         Get.delete<HiddenActivationController>(force: true);
@@ -74,9 +74,10 @@ class HiddenSessionService extends GetxService with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // If state changes to anything other than resumed (paused, inactive, hidden, detached), lock the session.
-    if (state != AppLifecycleState.resumed) {
-      AppLogger.info('[HiddenSessionService] App state changed to $state. Locking hidden session.');
+    // Lock only on true background or termination — not on transient inactive state
+    // (e.g. notification shade, incoming call UI, system dialog).
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      AppLogger.info('[HiddenSessionService] App backgrounded ($state). Locking.');
       lockSession();
     }
   }

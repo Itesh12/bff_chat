@@ -43,106 +43,115 @@ class CategoriesScreen extends GetView<NotesController> {
       child: StatefulBuilder(
         builder: (context, setLocalState) {
           final theme = Theme.of(context);
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppTextField(
-                controller: nameController,
-                labelText: 'Category Name',
-                hintText: 'e.g. Personal, Work, Finance',
-              ),
-              const AppGap.v16(),
-              const AppSectionHeader(title: 'Select Theme Color'),
-              const AppGap.v8(),
-              // Presets grid (4x3)
-              Container(
-                height: 140,
-                color: Colors.transparent,
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: _presets.length,
-                  itemBuilder: (context, index) {
-                    final preset = _presets[index];
-                    final hex = preset['hex']!;
-                    final color = _parseCategoryColor(context, hex);
-                    final isSelected = selectedHex == hex;
-
-                    return GestureDetector(
-                      onTap: () {
-                        setLocalState(() {
-                          selectedHex = hex;
-                        });
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? Colors.white : Colors.transparent,
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            if (isSelected)
-                              BoxShadow(
-                                color: theme.shadowColor.withValues(alpha: 0.3),
-                                blurRadius: 4,
-                                spreadRadius: 1,
-                              ),
-                          ],
-                        ),
-                        child: isSelected
-                            ? const Icon(Icons.check, color: Colors.white, size: 18)
-                            : null,
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const AppGap.v24(),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  AppButton.text(
-                    text: 'Cancel',
-                    onPressed: () => Navigator.pop(context),
+                  AppTextField(
+                    controller: nameController,
+                    labelText: 'Category Name',
+                    hintText: 'e.g. Personal, Work, Finance',
                   ),
-                  const AppGap.h8(),
-                  AppButton.primary(
-                    text: isEdit ? 'Save Changes' : 'Create',
-                    onPressed: () async {
-                      final name = nameController.text.trim();
-                      if (name.isEmpty) {
-                        AppSnackBar.error(title: 'Validation', message: 'Category name cannot be empty.');
-                        return;
-                      }
+                  const AppGap.v16(),
+                  const AppSectionHeader(title: 'Select Theme Color'),
+                  const AppGap.v8(),
+                  // Presets grid (4x3)
+                  Container(
+                    height: 140,
+                    color: Colors.transparent,
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 6,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemCount: _presets.length,
+                      itemBuilder: (context, index) {
+                        final preset = _presets[index];
+                        final hex = preset['hex']!;
+                        final color = _parseCategoryColor(context, hex);
+                        final isSelected = selectedHex == hex;
 
-                      if (isEdit) {
-                        final updated = category.copyWith(
-                          name: name,
-                          colorHex: selectedHex,
+                        return GestureDetector(
+                          onTap: () {
+                            setLocalState(() {
+                              selectedHex = hex;
+                            });
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? Colors.white : Colors.transparent,
+                                width: 2,
+                              ),
+                              boxShadow: [
+                                if (isSelected)
+                                  BoxShadow(
+                                    color: theme.shadowColor.withValues(alpha: 0.3),
+                                    blurRadius: 4,
+                                    spreadRadius: 1,
+                                  ),
+                              ],
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check, color: Colors.white, size: 18)
+                                : null,
+                          ),
                         );
-                        await updateCategory(updated);
-                      } else {
-                        await controller.createCategory(
-                          name: name,
-                          colorHex: selectedHex,
-                        );
-                      }
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                      }
-                    },
+                      },
+                    ),
+                  ),
+                  const AppGap.v24(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      AppButton.text(
+                        text: 'Cancel',
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const AppGap.h8(),
+                      AppButton.primary(
+                        text: isEdit ? 'Save Changes' : 'Create',
+                        onPressed: () async {
+                          final name = nameController.text.trim();
+                          if (name.isEmpty) {
+                            AppSnackBar.error(title: 'Validation', message: 'Category name cannot be empty.');
+                            return;
+                          }
+
+                          if (isEdit) {
+                            final updated = category.copyWith(
+                              name: name,
+                              colorHex: selectedHex,
+                            );
+                            await updateCategory(updated);
+                            AppSnackBar.success(title: 'Updated', message: 'Category renamed.');
+                          } else {
+                            await controller.createCategory(
+                              name: name,
+                              colorHex: selectedHex,
+                            );
+                            AppSnackBar.success(title: 'Created', message: '"$name" added.');
+                          }
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           );
         },
       ),
@@ -184,8 +193,14 @@ class CategoriesScreen extends GetView<NotesController> {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
+        return GridView.builder(
+          padding: const EdgeInsets.all(AppSpacing.s16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: AppSpacing.s12,
+            mainAxisSpacing: AppSpacing.s12,
+            childAspectRatio: 1.25,
+          ),
           itemCount: list.length,
           itemBuilder: (context, index) {
             final cat = list[index];
@@ -193,51 +208,102 @@ class CategoriesScreen extends GetView<NotesController> {
             final noteCount = controller.notes.where((n) => n.categoryId == cat.id).length;
 
             return AppCard(
-              margin: const EdgeInsets.symmetric(vertical: AppSpacing.s8),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: color,
-                    radius: 12,
-                  ),
-                  const AppGap.h16(),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          cat.name,
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+              padding: EdgeInsets.zero,
+              child: InkWell(
+                onTap: () {
+                  controller.setSelectedCategory(cat.id);
+                  Get.back();
+                },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(8),
+                          topRight: Radius.circular(8),
                         ),
-                        const AppGap.v4(),
-                        Text(
-                          '$noteCount active ${noteCount == 1 ? 'note' : 'notes'}',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppIconButton.secondary(
-                        icon: Icons.edit_outlined,
-                        tooltip: 'Edit Category',
-                        onPressed: () => _showCategoryBottomSheet(context, category: cat),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.s12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    cat.name,
+                                    style: AppTypography.titleMedium.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                PopupMenuButton<String>(
+                                  icon: Icon(Icons.more_vert, size: 20, color: theme.iconTheme.color?.withValues(alpha: 0.6)),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onSelected: (value) {
+                                    if (value == 'edit') {
+                                      _showCategoryBottomSheet(context, category: cat);
+                                    } else if (value == 'delete') {
+                                      _confirmDelete(context, cat);
+                                    }
+                                  },
+                                  itemBuilder: (context) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined, size: 16),
+                                          AppGap.h8(),
+                                          Text('Edit'),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                                          AppGap.h8(),
+                                          Text('Delete', style: TextStyle(color: Colors.red)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s8, vertical: AppSpacing.s4),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '$noteCount active',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const AppGap.h8(),
-                      AppIconButton.danger(
-                        icon: Icons.delete_outline,
-                        tooltip: 'Delete Category',
-                        onPressed: () => _confirmDelete(context, cat),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             );
           },

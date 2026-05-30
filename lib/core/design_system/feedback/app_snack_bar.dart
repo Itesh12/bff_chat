@@ -49,8 +49,10 @@ abstract final class AppSnackBar {
     if (context == null) return;
 
     final theme = Theme.of(context);
-    final colors = theme.extension<AppColorScheme>()!;
-    final baseColor = getThemeColor(colors);
+    final colors = theme.extension<AppColorScheme>();
+    final baseColor = colors != null
+        ? getThemeColor(colors)
+        : (theme.brightness == Brightness.dark ? Colors.tealAccent : Colors.teal);
 
     Get.snackbar(
       title,

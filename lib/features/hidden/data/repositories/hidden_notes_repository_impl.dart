@@ -10,17 +10,18 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
 
   HiddenNotesRepositoryImpl(this._notesDao);
 
+  // ---------------------------------------------------------------------------
+  // Internal helpers
+  // ---------------------------------------------------------------------------
+
   String _generateUuid() {
     final random = Random.secure();
     final List<int> bytes = List<int>.generate(16, (i) => random.nextInt(256));
     bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
     bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant RFC4122
-
     final StringBuffer buffer = StringBuffer();
     for (int i = 0; i < 16; i++) {
-      if (i == 4 || i == 6 || i == 8 || i == 10) {
-        buffer.write('-');
-      }
+      if (i == 4 || i == 6 || i == 8 || i == 10) buffer.write('-');
       buffer.write(bytes[i].toRadixString(16).padLeft(2, '0'));
     }
     return buffer.toString();
@@ -33,25 +34,60 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
       body: row.body,
       revision: row.revision,
       isFavorite: row.isFavorite,
+      isArchived: row.isArchived,
+      isDeleted: row.isDeleted,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      deletedAt: row.deletedAt,
       lastOpenedAt: row.lastOpenedAt,
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Watch streams
+  // ---------------------------------------------------------------------------
+
   @override
   Stream<List<HiddenNoteEntity>> watchAllNotes() {
-    return _notesDao.watchAllNotes().map(
-          (rows) => rows.map(_toEntity).toList(),
-        );
+    return _notesDao.watchAllNotes().map((rows) => rows.map(_toEntity).toList());
   }
+
+  @override
+  Stream<List<HiddenNoteEntity>> watchFavoriteNotes() {
+    return _notesDao.watchFavoriteNotes().map((rows) => rows.map(_toEntity).toList());
+  }
+
+  // ---------------------------------------------------------------------------
+  // One-shot queries
+  // ---------------------------------------------------------------------------
 
   @override
   Future<HiddenNoteEntity?> getNoteById(String id) async {
     final row = await _notesDao.getNoteById(id);
-    if (row == null) return null;
-    return _toEntity(row);
+    return row == null ? null : _toEntity(row);
   }
+
+  @override
+  Future<List<HiddenNoteEntity>> getArchivedNotes() async {
+    final rows = await _notesDao.getArchivedNotes();
+    return rows.map(_toEntity).toList();
+  }
+
+  @override
+  Future<List<HiddenNoteEntity>> getTrashedNotes() async {
+    final rows = await _notesDao.getTrashedNotes();
+    return rows.map(_toEntity).toList();
+  }
+
+  @override
+  Future<List<HiddenNoteEntity>> searchNotes(String query) async {
+    final rows = await _notesDao.searchNotes(query);
+    return rows.map(_toEntity).toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mutations
+  // ---------------------------------------------------------------------------
 
   @override
   Future<HiddenNoteEntity> createNote({required String title, required String body}) async {
@@ -63,10 +99,11 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
       body: Value(body),
       revision: const Value(1),
       isFavorite: const Value(false),
+      isArchived: const Value(false),
+      isDeleted: const Value(false),
       createdAt: Value(now),
       updatedAt: Value(now),
     );
-
     await _notesDao.insertNote(companion);
     final row = await _notesDao.getNoteById(id);
     return _toEntity(row!);
@@ -81,11 +118,13 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
       body: Value(note.body),
       revision: Value(note.revision + 1),
       isFavorite: Value(note.isFavorite),
+      isArchived: Value(note.isArchived),
+      isDeleted: Value(note.isDeleted),
       createdAt: Value(note.createdAt),
       updatedAt: Value(now),
+      deletedAt: Value(note.deletedAt),
       lastOpenedAt: Value(note.lastOpenedAt),
     );
-
     await _notesDao.updateNote(companion);
     final row = await _notesDao.getNoteById(note.id);
     return _toEntity(row!);
@@ -93,14 +132,12 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
 
   @override
   Future<void> updateLastOpened(String id) async {
-    final now = DateTime.now().toUtc();
     final note = await getNoteById(id);
     if (note != null) {
-      final companion = HiddenNotesTableCompanion(
-        id: Value(note.id),
-        lastOpenedAt: Value(now),
-      );
-      await _notesDao.updateNote(companion);
+      await _notesDao.updateNote(HiddenNotesTableCompanion(
+        id: Value(id),
+        lastOpenedAt: Value(DateTime.now().toUtc()),
+      ));
     }
   }
 
@@ -108,25 +145,42 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
   Future<void> toggleFavorite(String id) async {
     final note = await getNoteById(id);
     if (note != null) {
-      final companion = HiddenNotesTableCompanion(
-        id: Value(note.id),
+      await _notesDao.updateNote(HiddenNotesTableCompanion(
+        id: Value(id),
         isFavorite: Value(!note.isFavorite),
         updatedAt: Value(DateTime.now().toUtc()),
-      );
-      await _notesDao.updateNote(companion);
+      ));
     }
   }
 
   @override
-  Future<void> permanentlyDeleteNote(String id) async {
-    await _notesDao.deleteNote(id);
-  }
+  Future<void> archiveNote(String id) => _notesDao.archiveNote(id);
 
   @override
-  Future<int> notesCount() async {
-    // Note count query can be run directly or using the select API on table.
-    // Let's implement it via custom or query:
-    final count = await _notesDao.watchAllNotes().first;
-    return count.length;
-  }
+  Future<void> restoreNote(String id) => _notesDao.restoreNote(id);
+
+  @override
+  Future<void> softDeleteNote(String id) => _notesDao.softDeleteNote(id);
+
+  @override
+  Future<void> permanentlyDeleteNote(String id) => _notesDao.deleteNote(id);
+
+  @override
+  Future<void> emptyTrash() => _notesDao.emptyTrash();
+
+  // ---------------------------------------------------------------------------
+  // Statistics (proper SQL COUNT — no stream scan)
+  // ---------------------------------------------------------------------------
+
+  @override
+  Future<int> notesCount() => _notesDao.countActive();
+
+  @override
+  Future<int> favoritesCount() => _notesDao.countFavorites();
+
+  @override
+  Future<int> archivedCount() => _notesDao.countArchived();
+
+  @override
+  Future<int> trashedCount() => _notesDao.countTrashed();
 }

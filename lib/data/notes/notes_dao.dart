@@ -110,6 +110,8 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
     await (update(notesTable)..where((t) => t.id.equals(id)))
         .write(NotesTableCompanion(
           isArchived: const Value(false),
+          isDeleted: const Value(false),
+          deletedAt: const Value(null),
           updatedAt: Value(now),
         ));
   }
@@ -126,6 +128,17 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
 
   Future<int> deleteNotePermanently(String id) {
     return (delete(notesTable)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<List<NoteRow>> getTrashedNotes({NoteSortMode sort = NoteSortMode.updatedDesc}) {
+    final query = select(notesTable)
+      ..where((t) => t.isDeleted.equals(true));
+    _applySorting(query, sort);
+    return query.get();
+  }
+
+  Future<int> emptyTrash() {
+    return (delete(notesTable)..where((t) => t.isDeleted.equals(true))).go();
   }
 
   // Statistics
@@ -152,6 +165,15 @@ class NotesDao extends DatabaseAccessor<AppDatabase> with _$NotesDaoMixin {
     final query = selectOnly(notesTable)
       ..addColumns([countExpr])
       ..where(notesTable.isDeleted.not() & notesTable.isArchived.equals(true));
+    final row = await query.getSingle();
+    return row.read(countExpr) ?? 0;
+  }
+
+  Future<int> countTrashed() async {
+    final countExpr = notesTable.id.count();
+    final query = selectOnly(notesTable)
+      ..addColumns([countExpr])
+      ..where(notesTable.isDeleted.equals(true));
     final row = await query.getSingle();
     return row.read(countExpr) ?? 0;
   }

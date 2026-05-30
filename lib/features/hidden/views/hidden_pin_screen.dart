@@ -100,6 +100,16 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
               // Error Message
               Center(
                 child: Obx(() {
+                  if (controller.isCooldownActive) {
+                    return Text(
+                      'Too many attempts. Try again in ${controller.cooldownRemaining.value}s',
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: context.colors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    );
+                  }
                   final err = controller.errorMessage.value;
                   if (err.isEmpty) return const AppGap.v24();
                   return Text(
@@ -160,10 +170,11 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
                 final hasInput = controller.isConfirmingMode.value
                     ? controller.confirmInput.value.length >= 4
                     : controller.pinInput.value.length >= 4;
+                final disabled = controller.isCooldownActive;
 
                 return AppButton.primary(
                   text: controller.isConfirmingMode.value ? 'Confirm PIN' : 'Submit PIN',
-                  onPressed: hasInput ? controller.submit : null,
+                  onPressed: (hasInput && !disabled) ? controller.submit : null,
                 );
               }),
               const AppGap.v12(),
@@ -200,19 +211,24 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: AppRadius.max,
-          onTap: () => controller.appendDigit(digit),
-          child: Center(
-            child: Text(
-              digit,
-              style: AppTypography.headlineMedium.copyWith(
-                color: theme.textTheme.headlineMedium?.color,
-                fontWeight: FontWeight.bold,
+        child: Obx(() {
+          final disabled = controller.isCooldownActive;
+          return InkWell(
+            borderRadius: AppRadius.max,
+            onTap: disabled ? null : () => controller.appendDigit(digit),
+            child: Center(
+              child: Text(
+                digit,
+                style: AppTypography.headlineMedium.copyWith(
+                  color: disabled
+                      ? theme.textTheme.headlineMedium?.color?.withValues(alpha: 0.3)
+                      : theme.textTheme.headlineMedium?.color,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   }
@@ -234,17 +250,22 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
       ),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          borderRadius: AppRadius.max,
-          onTap: onPressed,
-          child: Center(
-            child: Icon(
-              icon,
-              color: theme.textTheme.titleMedium?.color,
-              size: 24,
+        child: Obx(() {
+          final disabled = controller.isCooldownActive;
+          return InkWell(
+            borderRadius: AppRadius.max,
+            onTap: disabled ? null : onPressed,
+            child: Center(
+              child: Icon(
+                icon,
+                color: disabled
+                    ? theme.textTheme.titleMedium?.color?.withValues(alpha: 0.3)
+                    : theme.textTheme.titleMedium?.color,
+                size: 24,
+              ),
             ),
-          ),
-        ),
+          );
+        }),
       ),
     );
   }

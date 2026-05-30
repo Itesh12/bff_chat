@@ -9,12 +9,18 @@ import 'package:memovault/features/notes/views/note_editor_screen.dart';
 import 'package:memovault/features/notes/views/note_detail_screen.dart';
 import 'package:memovault/features/notes/views/notes_search_screen.dart';
 import 'package:memovault/features/notes/views/notes_archive_screen.dart';
+import 'package:memovault/features/notes/views/notes_favorites_screen.dart';
+import 'package:memovault/features/notes/views/notes_trash_screen.dart';
 import 'package:memovault/features/notes/views/categories_screen.dart';
 
 import 'package:memovault/features/hidden/bindings/hidden_binding.dart';
 import 'package:memovault/features/hidden/middleware/hidden_session_guard_middleware.dart';
 import 'package:memovault/features/hidden/views/hidden_pin_screen.dart';
 import 'package:memovault/features/hidden/views/hidden_home_screen.dart';
+import 'package:memovault/features/hidden/views/hidden_archive_screen.dart';
+import 'package:memovault/features/hidden/views/hidden_trash_screen.dart';
+import 'package:memovault/features/hidden/views/hidden_favorites_screen.dart';
+import 'package:memovault/features/hidden/views/hidden_search_screen.dart';
 
 abstract final class AppPages {
   static final List<GetPage<dynamic>> pages = [
@@ -52,6 +58,16 @@ abstract final class AppPages {
       binding: NotesBinding(),
     ),
     GetPage(
+      name: AppRoutes.notesFavorites,
+      page: () => const NotesFavoritesScreen(),
+      binding: NotesBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.notesTrash,
+      page: () => const NotesTrashScreen(),
+      binding: NotesBinding(),
+    ),
+    GetPage(
       name: AppRoutes.categories,
       page: () => const CategoriesScreen(),
       binding: NotesBinding(),
@@ -64,6 +80,30 @@ abstract final class AppPages {
     GetPage(
       name: AppRoutes.hiddenHome,
       page: () => const HiddenHomeScreen(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenArchive,
+      page: () => const HiddenArchiveScreen(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenTrash,
+      page: () => const HiddenTrashScreen(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenFavorites,
+      page: () => const HiddenFavoritesScreen(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenSearch,
+      page: () => const HiddenSearchScreen(),
       binding: HiddenBinding(),
       middlewares: [HiddenSessionGuardMiddleware()],
     ),

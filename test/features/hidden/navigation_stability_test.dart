@@ -101,6 +101,15 @@ class FakeNotesRepository implements NotesRepository {
 
   @override
   Future<int> archivedCount() async => 0;
+
+  @override
+  Future<List<NoteEntity>> getTrashedNotes({NoteSortMode sort = NoteSortMode.updatedDesc}) async => [];
+
+  @override
+  Future<void> emptyTrash() async {}
+
+  @override
+  Future<int> trashedCount() async => 0;
 }
 
 class FakeCategoriesRepository implements CategoriesRepository {
@@ -256,6 +265,28 @@ class FakeHiddenNotesRepository implements HiddenNotesRepository {
   Future<void> permanentlyDeleteNote(String id) async {}
   @override
   Future<int> notesCount() async => 0;
+  @override
+  Stream<List<HiddenNoteEntity>> watchFavoriteNotes() => Stream.value([]);
+  @override
+  Future<List<HiddenNoteEntity>> getArchivedNotes() async => [];
+  @override
+  Future<List<HiddenNoteEntity>> getTrashedNotes() async => [];
+  @override
+  Future<List<HiddenNoteEntity>> searchNotes(String query) async => [];
+  @override
+  Future<void> archiveNote(String id) async {}
+  @override
+  Future<void> restoreNote(String id) async {}
+  @override
+  Future<void> softDeleteNote(String id) async {}
+  @override
+  Future<void> emptyTrash() async {}
+  @override
+  Future<int> favoritesCount() async => 0;
+  @override
+  Future<int> archivedCount() async => 0;
+  @override
+  Future<int> trashedCount() async => 0;
 }
 
 void main() {
@@ -504,6 +535,67 @@ void main() {
       // Clean up the inactivity timer to avoid leaking it in widget test
       sessionService.lockSession();
       await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets('Security S4: Lock while on hidden sub-route redirects to safe notes screen', (tester) async {
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: AppRoutes.notes,
+          getPages: AppPages.pages,
+          defaultTransition: Transition.noTransition,
+          transitionDuration: Duration.zero,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Setup: activate session and navigate to hidden archive
+      sessionService.activateSession();
+      Get.offAllNamed(AppRoutes.hiddenArchive);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(Get.currentRoute, AppRoutes.hiddenArchive);
+
+      // Lock the session (simulating timeout or background event)
+      sessionService.lockSession();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify that we are redirected to safe notes dashboard
+      expect(Get.currentRoute, AppRoutes.notes);
+      expect(sessionService.isLocked, isTrue);
+    });
+
+    testWidgets('Security S5: App backgrounded (paused) locks session and ejects from hidden routes', (tester) async {
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: AppRoutes.notes,
+          getPages: AppPages.pages,
+          defaultTransition: Transition.noTransition,
+          transitionDuration: Duration.zero,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Setup: activate session and go to hidden home
+      sessionService.activateSession();
+      Get.offAllNamed(AppRoutes.hiddenHome);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(Get.currentRoute, AppRoutes.hiddenHome);
+
+      // Trigger app lifecycle paused (background)
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify session locked and user ejected to notes screen
+      expect(sessionService.isLocked, isTrue);
+      expect(Get.currentRoute, AppRoutes.notes);
+
+      // Resume app, verify we stay on the safe notes screen
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(Get.currentRoute, AppRoutes.notes);
     });
   });
 }

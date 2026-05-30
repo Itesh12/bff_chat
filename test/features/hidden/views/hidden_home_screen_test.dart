@@ -17,6 +17,7 @@ class FakeHiddenNotesRepository implements HiddenNotesRepository {
   int createCallCount = 0;
   int updateCallCount = 0;
   int deleteCallCount = 0;
+  int softDeleteCallCount = 0;
   int toggleFavoriteCallCount = 0;
 
   void addNote(HiddenNoteEntity note) {
@@ -88,6 +89,70 @@ class FakeHiddenNotesRepository implements HiddenNotesRepository {
 
   @override
   Future<int> notesCount() async => _notes.length;
+
+  @override
+  Stream<List<HiddenNoteEntity>> watchFavoriteNotes() {
+    return _notesStreamController.stream.map((list) => list.where((n) => n.isFavorite && !n.isDeleted).toList());
+  }
+
+  @override
+  Future<List<HiddenNoteEntity>> getArchivedNotes() async {
+    return _notes.where((n) => n.isArchived && !n.isDeleted).toList();
+  }
+
+  @override
+  Future<List<HiddenNoteEntity>> getTrashedNotes() async {
+    return _notes.where((n) => n.isDeleted).toList();
+  }
+
+  @override
+  Future<List<HiddenNoteEntity>> searchNotes(String query) async {
+    final q = query.toLowerCase();
+    return _notes.where((n) => !n.isArchived && !n.isDeleted && (n.title.toLowerCase().contains(q) || n.body.toLowerCase().contains(q))).toList();
+  }
+
+  @override
+  Future<void> archiveNote(String id) async {
+    final idx = _notes.indexWhere((n) => n.id == id);
+    if (idx != -1) {
+      _notes[idx] = _notes[idx].copyWith(isArchived: true);
+      _notesStreamController.add(List.from(_notes));
+    }
+  }
+
+  @override
+  Future<void> restoreNote(String id) async {
+    final idx = _notes.indexWhere((n) => n.id == id);
+    if (idx != -1) {
+      _notes[idx] = _notes[idx].copyWith(isArchived: false, isDeleted: false, deletedAt: null);
+      _notesStreamController.add(List.from(_notes));
+    }
+  }
+
+  @override
+  Future<void> softDeleteNote(String id) async {
+    softDeleteCallCount++;
+    final idx = _notes.indexWhere((n) => n.id == id);
+    if (idx != -1) {
+      _notes[idx] = _notes[idx].copyWith(isDeleted: true, deletedAt: DateTime.now());
+      _notesStreamController.add(List.from(_notes));
+    }
+  }
+
+  @override
+  Future<void> emptyTrash() async {
+    _notes.removeWhere((n) => n.isDeleted);
+    _notesStreamController.add(List.from(_notes));
+  }
+
+  @override
+  Future<int> favoritesCount() async => _notes.where((n) => n.isFavorite && !n.isDeleted).length;
+
+  @override
+  Future<int> archivedCount() async => _notes.where((n) => n.isArchived && !n.isDeleted).length;
+
+  @override
+  Future<int> trashedCount() async => _notes.where((n) => n.isDeleted).length;
 
   void dispose() {
     _notesStreamController.close();
@@ -208,22 +273,25 @@ void main() {
       final favoriteFinder = find.byIcon(Icons.star_outline_rounded);
       expect(favoriteFinder, findsOneWidget);
       await tester.tap(favoriteFinder);
-      await tester.pump(Duration.zero);
+      await tester.pumpAndSettle();
 
       expect(fakeRepository.toggleFavoriteCallCount, 1);
       expect(fakeSessionService.resetTimerCallCount, greaterThanOrEqualTo(1));
 
-      final deleteFinder = find.byIcon(Icons.delete_outline_rounded);
+      final deleteFinder = find.descendant(
+        of: find.byType(AppCard),
+        matching: find.byIcon(Icons.delete_outline_rounded),
+      );
       expect(deleteFinder, findsOneWidget);
       await tester.tap(deleteFinder);
-      await tester.pump();
+      await tester.pumpAndSettle();
 
       final confirmDeleteFinder = find.text('Delete');
       expect(confirmDeleteFinder, findsOneWidget);
       await tester.tap(confirmDeleteFinder);
-      await tester.pump(Duration.zero);
+      await tester.pumpAndSettle();
 
-      expect(fakeRepository.deleteCallCount, 1);
+      expect(fakeRepository.softDeleteCallCount, 1);
     });
   });
 }

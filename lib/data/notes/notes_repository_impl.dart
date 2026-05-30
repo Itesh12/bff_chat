@@ -152,6 +152,17 @@ class NotesRepositoryImpl implements NotesRepository {
     await _notesDao.deleteNotePermanently(id);
   }
 
+  @override
+  Future<List<NoteEntity>> getTrashedNotes({NoteSortMode sort = NoteSortMode.updatedDesc}) async {
+    final rows = await _notesDao.getTrashedNotes(sort: sort);
+    return rows.map(_toEntity).toList();
+  }
+
+  @override
+  Future<void> emptyTrash() async {
+    await _notesDao.emptyTrash();
+  }
+
   // Statistics Counts
   @override
   Future<int> notesCount() => _notesDao.countNotes();
@@ -161,4 +172,7 @@ class NotesRepositoryImpl implements NotesRepository {
 
   @override
   Future<int> archivedCount() => _notesDao.countArchived();
+
+  @override
+  Future<int> trashedCount() => _notesDao.countTrashed();
 }

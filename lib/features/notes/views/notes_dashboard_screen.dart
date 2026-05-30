@@ -100,9 +100,21 @@ class NotesDashboardScreen extends GetView<NotesController> {
         ),
         const AppGap.h8(),
         AppIconButton.secondary(
+          icon: Icons.star_border_rounded,
+          tooltip: 'Favorites',
+          onPressed: () => Get.toNamed('/notes/favorites'),
+        ),
+        const AppGap.h8(),
+        AppIconButton.secondary(
           icon: Icons.archive,
           tooltip: 'Archived Notes',
           onPressed: () => Get.toNamed('/notes/archive'),
+        ),
+        const AppGap.h8(),
+        AppIconButton.secondary(
+          icon: Icons.delete_outline,
+          tooltip: 'Trash',
+          onPressed: () => Get.toNamed('/notes/trash'),
         ),
         const AppGap.h8(),
         Obx(() {
@@ -273,11 +285,16 @@ class NotesDashboardScreen extends GetView<NotesController> {
           ),
         ],
       ),
-      floatingActionButton: AppButton.primary(
-        text: 'New Note',
-        icon: Icons.add,
-        onPressed: () => Get.toNamed('/notes/editor'),
-      ),
+      floatingActionButton: Obx(() {
+        if (controller.filteredNotes.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return AppButton.primary(
+          text: 'New Note',
+          icon: Icons.add,
+          onPressed: () => Get.toNamed('/notes/editor'),
+        );
+      }),
     );
   }
 }

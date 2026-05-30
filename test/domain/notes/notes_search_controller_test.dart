@@ -46,11 +46,17 @@ class FakeNotesRepository implements NotesRepository {
   @override
   Future<void> permanentlyDeleteNote(String id) => throw UnimplementedError();
   @override
+  Future<List<NoteEntity>> getTrashedNotes({NoteSortMode sort = NoteSortMode.updatedDesc}) => throw UnimplementedError();
+  @override
+  Future<void> emptyTrash() => throw UnimplementedError();
+  @override
   Future<int> notesCount() => throw UnimplementedError();
   @override
   Future<int> favoritesCount() => throw UnimplementedError();
   @override
   Future<int> archivedCount() => throw UnimplementedError();
+  @override
+  Future<int> trashedCount() => throw UnimplementedError();
 }
 
 void main() {

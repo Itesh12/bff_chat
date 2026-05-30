@@ -43,9 +43,11 @@ class NotesBinding extends Bindings {
         Get.find<CategoriesRepository>(),
         Get.find<NotesPreferencesService>(),
       ),
+      fenix: true,
     );
     Get.lazyPut<NotesSearchController>(
       () => NotesSearchController(Get.find<NotesRepository>()),
+      fenix: true,
     );
   }
 }

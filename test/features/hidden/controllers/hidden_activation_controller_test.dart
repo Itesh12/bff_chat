@@ -214,6 +214,42 @@ void main() {
       expect(fakeSessionService.activateCallCount, 1);
     });
 
+    test('5 failed attempts triggers 30s cooldown and blocks input', () async {
+      fakeVaultService.isSetup = true;
+      controller.onInit();
+      controller.isSetup.value = true;
+
+      expect(controller.failedAttempts.value, 0);
+      expect(controller.isCooldownActive, isFalse);
+
+      // Fail 4 times
+      for (int i = 0; i < 4; i++) {
+        controller.pinInput.value = '9999';
+        await controller.submit();
+        expect(controller.errorMessage.value, 'Incorrect PIN');
+      }
+      expect(controller.failedAttempts.value, 4);
+      expect(controller.isCooldownActive, isFalse);
+
+      // Fail 5th time
+      controller.pinInput.value = '9999';
+      await controller.submit();
+      expect(controller.failedAttempts.value, 5);
+      expect(controller.isCooldownActive, isTrue);
+      expect(controller.cooldownRemaining.value, 30);
+      expect(controller.errorMessage.value, 'Too many attempts. Cooldown active.');
+
+      // Verify input is blocked during cooldown
+      controller.appendDigit('1');
+      expect(controller.pinInput.value, ''); // Blocked!
+
+      // Submit is also blocked (should not make further unlock calls)
+      final preUnlockCallCount = fakeVaultService.unlockVaultCallCount;
+      controller.pinInput.value = '1234';
+      await controller.submit();
+      expect(fakeVaultService.unlockVaultCallCount, preUnlockCallCount); // No new unlock attempt!
+    });
+
     test('triggerPanicWipe wipes and resets controller state', () async {
       await controller.triggerPanicWipe();
       expect(fakeVaultService.panicWipeCallCount, 1);

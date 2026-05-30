@@ -15,15 +15,29 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   HiddenVaultDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
-        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch.');
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v2).');
         await m.createAll();
-        AppLogger.info('[HiddenVaultDatabase] Migration completed');
+        AppLogger.info('[HiddenVaultDatabase] Schema v2 created.');
+      },
+      onUpgrade: (Migrator m, int from, int to) async {
+        AppLogger.info('[HiddenVaultDatabase] Upgrading schema from v$from to v$to.');
+        if (from < 2) {
+          // v1 → v2: add archive/trash/delete tracking columns
+          await m.addColumn(hiddenNotesTable, hiddenNotesTable.isArchived);
+          await m.addColumn(hiddenNotesTable, hiddenNotesTable.isDeleted);
+          await m.addColumn(hiddenNotesTable, hiddenNotesTable.deletedAt);
+          
+          // Populate defaults for existing rows to avoid NULL values which break WHERE filters
+          await m.database.customStatement('UPDATE hidden_notes SET is_archived = 0, is_deleted = 0;');
+          
+          AppLogger.info('[HiddenVaultDatabase] v2 migration: added isArchived, isDeleted, deletedAt.');
+        }
       },
     );
   }

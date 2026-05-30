@@ -8,6 +8,7 @@ import 'package:memovault/domain/notes/note_sort_mode.dart';
 import 'package:memovault/domain/notes/notes_repository.dart';
 import 'package:memovault/domain/notes/categories_repository.dart';
 import 'package:memovault/domain/notes/note_metrics.dart';
+import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
 
 import 'package:memovault/core/observability/performance_tracker.dart';
 
@@ -34,6 +35,7 @@ class NotesController extends GetxController {
   final RxInt totalNotes = 0.obs;
   final RxInt favoritesCount = 0.obs;
   final RxInt archivedCount = 0.obs;
+  final RxInt trashedCount = 0.obs;
 
   StreamSubscription<List<NoteEntity>>? _notesSubscription;
 
@@ -172,15 +174,24 @@ class NotesController extends GetxController {
   }
 
   Future<void> toggleFavorite(String id) async {
-    await _notesRepository.toggleFavorite(id);
-    AppLogger.info('note_favorited');
-    await refreshStats();
+    final note = await _notesRepository.getNoteById(id);
+    if (note != null) {
+      await _notesRepository.toggleFavorite(id);
+      AppLogger.info('note_favorited');
+      await refreshStats();
+      if (note.isFavorite) {
+        AppSnackBar.info(title: 'Removed', message: 'Removed from favorites.');
+      } else {
+        AppSnackBar.success(title: 'Favorited', message: 'Added to favorites.');
+      }
+    }
   }
 
   Future<void> archiveNote(String id) async {
     await _notesRepository.archiveNote(id);
     AppLogger.info('note_archived');
     await refreshStats();
+    AppSnackBar.success(title: 'Archived', message: 'Note moved to archive.');
   }
 
   Future<void> restoreNote(String id) async {
@@ -201,11 +212,18 @@ class NotesController extends GetxController {
     await refreshStats();
   }
 
+  Future<void> emptyTrash() async {
+    await _notesRepository.emptyTrash();
+    AppLogger.info('trash_emptied');
+    await refreshStats();
+  }
+
   Future<void> refreshStats() async {
     try {
       totalNotes.value = await _notesRepository.notesCount();
       favoritesCount.value = await _notesRepository.favoritesCount();
       archivedCount.value = await _notesRepository.archivedCount();
+      trashedCount.value = await _notesRepository.trashedCount();
     } catch (e) {
       AppLogger.error('Failed to refresh stats', error: e);
     }
