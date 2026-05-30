@@ -5,29 +5,42 @@ import 'package:drift_sqflite/drift_sqflite.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 
 import 'package:memovault/core/storage/tables/app_metadata_table.dart';
+import 'package:memovault/core/storage/tables/categories_table.dart';
+import 'package:memovault/core/storage/tables/notes_table.dart';
+import 'package:memovault/data/notes/notes_dao.dart';
+import 'package:memovault/data/notes/categories_dao.dart';
 
 part 'app_database.g.dart';
 
 /// The single Drift database instance for MemoVault.
 ///
-/// Contains only infrastructure tables at Phase 1.4:
+/// Contains infrastructure and feature tables:
 ///   - [AppMetadata] — internal key-value config store
+///   - [CategoriesTable] — notes categories
+///   - [NotesTable] — encrypted notes repository
 ///
-/// Feature tables (Notes, Vault, Messages, Media) are added in later phases.
 /// Schema version history must be documented and migrated here.
-@DriftDatabase(tables: [AppMetadata])
+@DriftDatabase(
+  tables: [AppMetadata, CategoriesTable, NotesTable],
+  daos: [NotesDao, CategoriesDao],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
-  /// No migrations needed yet. Stubs here to ease future additions.
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
+      },
+      onUpgrade: (Migrator m, int from, int to) async {
+        if (from < 2) {
+          await m.createTable(categoriesTable);
+          await m.createTable(notesTable);
+        }
       },
     );
   }

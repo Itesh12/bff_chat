@@ -469,3 +469,50 @@ MemoVault is a security-first note and communication vault app. Telemetry and di
 - Giving the user control over telemetry satisfies modern privacy standards (GDPR, CCPA).
 - Standardizing logging rules from day one prevents technical debt.
 
+---
+
+## ADR-014 — Notes Domain Architecture
+
+**Status:** Accepted
+
+**Context:**
+Phase 2.0 implements the first user-facing feature on top of the Phase 1 secure foundation: the visible Notes application. It must be a genuinely high-quality notes app on its own, with zero hints of the messaging layer, while staying architecture-ready for Phase 3 secret access, sync conflicts, categories reordering, and performance scaling.
+
+**Decision:**
+
+1. **Client-Generated UUIDs for Note IDs:**
+   - Notes use random version-4 UUIDs generated on the client using a cryptographically secure generator (`Random.secure()`).
+   - Autoincrement IDs are forbidden to avoid sync conflicts across devices.
+
+2. **Soft Deletion (`isDeleted` + `deletedAt`):**
+   - Notes are soft-deleted first rather than purged from SQLite immediately.
+   - Enables sync conflict resolution and cross-device synchronization state tracking.
+
+3. **Optimistic Concurrency Control (OCC) via `revision`:**
+   - Note schemas track an integer `revision` field (starting at 1, incrementing on every database write).
+   - Essential for offline-first conflict resolution, revision history, and recovery.
+
+4. **Statistics Counter Methods:**
+   - Repository defines quick-access statistics: `notesCount`, `favoritesCount`, and `archivedCount`.
+   - Native SQL aggregate `SELECT COUNT(*)` queries mapped in Drift DAOs for high speed.
+
+5. **`lastOpenedAt` Timestamp Column:**
+   - Tracks when a note detail screen is opened without bumping the `revision` or triggering sync alerts.
+   - Forward-compatible with "Recently Viewed" and smart suggestions without parsing log files.
+
+6. **Decoupled `NotesSearchController`:**
+   - Completely isolates search reactive state from `NotesController`.
+   - Exposes a clean `onQuerySubmitted` hook where Phase 3 attaches covert keyword checks, keeping dashboard and search UI completely clean of messaging leakage.
+
+7. **Search Character Threshold:**
+   - Searches only fire when the query is 2+ characters to optimize SQL performance and reduce CPU overhead.
+
+8. **Builder-Based Note Rendering:**
+   - UI lists/grids must use `ListView.builder` or `GridView.builder` exclusively.
+   - Prevents memory leaks and jank when rendering 100+ secure notes.
+
+**Rationale:**
+- Adding columns like `revision`, `lastOpenedAt`, and category `displayOrder` now prevents database migration complications later.
+- Isolating search controller ensures complete separation of concerns and reduces the risk of covert code leaking into public notes widgets.
+- Pure Dart UUID generation avoids extra external packages.
+

@@ -20,7 +20,7 @@ class App extends StatelessWidget {
       return GetMaterialApp(
         title: 'MemoVault',
         debugShowCheckedModeBanner: false,
-        initialRoute: AppRoutes.themeSandbox,
+        initialRoute: AppRoutes.notes,
         initialBinding: InitialBinding(),
         getPages: AppPages.pages,
         theme: AppTheme.light,
