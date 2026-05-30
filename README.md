@@ -4,7 +4,7 @@
 > **Internal project name:** memovault  
 > **Repository:** memovault  
 > **Public identity:** A premium Notes / Vault application  
-> **Current Phase:** 1.1 — Project Bootstrap (🟡 Planning — Awaiting Approval)  
+> **Current Phase:** 1.2 — Core Architecture (🟡 Planning)  
 > **Phase 0:** 🔒 LOCKED & APPROVED
 
 ---
@@ -39,7 +39,7 @@ See [docs/09_development_workflow.md](docs/09_development_workflow.md) for the f
 | 10 | [Change Log](docs/10_changelog.md) | Chronological history of all changes | ✅ Active |
 | 11 | [Risk Register](docs/11_risk_register.md) | 18 risks across technical, security, and operational categories | ✅ Complete |
 | 12 | [Phase 1 Implementation Plan](docs/12_phase1_implementation_plan.md) | Phase 1 checkpoint overview (1.1–1.6) | 🟡 In Progress |
-| 13 | [Phase 1.1 Bootstrap Plan](docs/13_phase1_1_bootstrap_plan.md) | Detailed plan for Phase 1.1 Project Bootstrap | ⏳ Awaiting Approval |
+| 13 | [Phase 1.1 Bootstrap Plan](docs/13_phase1_1_bootstrap_plan.md) | Detailed plan for Phase 1.1 Project Bootstrap | ✅ Complete |
 
 ---
 
@@ -63,8 +63,8 @@ See [docs/09_development_workflow.md](docs/09_development_workflow.md) for the f
 | Phase | Title | Status |
 |---|---|---|
 | **0** | Product Foundation & Architecture | 🔒 LOCKED & APPROVED |
-| **1.1** | Project Bootstrap | 🟡 Planning — Awaiting Approval |
-| 1.2 | Core Architecture | ⬜ Pending |
+| **1.1** | Project Bootstrap | ✅ Complete |
+| 1.2 | Core Architecture | 🟡 Planning |
 | 1.3 | Theme & Design System | ⬜ Pending |
 | 1.4 | Storage Layer | ⬜ Pending |
 | 1.5 | Observability Layer | ⬜ Pending |
@@ -79,7 +79,7 @@ See [docs/09_development_workflow.md](docs/09_development_workflow.md) for the f
 
 ## Quick Start
 
-> Flutter project has not been initialized yet. This begins in **Phase 1** after plan approval.
+> Flutter project initialized with FVM version pinning and multi-flavor configuration.
 
 ```bash
 # Phase 1 onward:

@@ -1,10 +1,10 @@
 # 12 — Phase 1 Implementation Plan: Core Application Framework
 
-> **Document Status:** 🟡 In Progress — Phase 1.1 Approved  
+> **Document Status:** 🟡 In Progress — Phase 1.1 Complete  
 > **Last Updated:** 2026-05-30  
 > **Phase:** 1 — Core Application Framework  
 > **Owner:** Engineering Team  
-> **Prerequisite:** Phase 0 🔒 LOCKED & APPROVED
+> **Prerequisite:** Phase 0 🔒 LOCKED & APPROVED  
 
 ---
 
@@ -18,8 +18,8 @@ Phase 1 is executed as **6 independent checkpoints**. Each checkpoint:
 
 | Checkpoint | Title | Plan Document | Status |
 |---|---|---|---|
-| **1.1** | Project Bootstrap | [13_phase1_1_bootstrap_plan.md](13_phase1_1_bootstrap_plan.md) | 🟡 Planning — Awaiting Approval |
-| 1.2 | Core Architecture | TBD after 1.1 approval | ⬜ Pending |
+| **1.1** | Project Bootstrap | [13_phase1_1_bootstrap_plan.md](13_phase1_1_bootstrap_plan.md) | ✅ Complete |
+| 1.2 | Core Architecture | TBD after 1.1 approval | 🟡 Planning |
 | 1.3 | Theme & Design System | TBD after 1.2 approval | ⬜ Pending |
 | 1.4 | Storage Layer | TBD after 1.3 approval | ⬜ Pending |
 | 1.5 | Observability Layer | TBD after 1.4 approval | ⬜ Pending |

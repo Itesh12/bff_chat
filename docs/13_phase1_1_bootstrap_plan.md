@@ -1,6 +1,6 @@
 # 13 — Phase 1.1: Project Bootstrap
 
-> **Document Status:** Awaiting Approval  
+> **Document Status:** ✅ Complete — Closed & Approved  
 > **Last Updated:** 2026-05-30  
 > **Checkpoint:** 1.1 of 6 — Project Bootstrap  
 > **Owner:** Engineering Team  
@@ -182,7 +182,7 @@ fvm use stable --force
 ```
 
 - Commit `.fvmrc` immediately after pinning
-- Record the exact Flutter version in this document after pinning
+- Record the exact Flutter version in this document after pinning: **Flutter 3.44.0 (channel stable)**
 
 ---
 

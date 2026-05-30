@@ -8,6 +8,23 @@
 
 ## [Unreleased]
 
+### Added (Phase 1.1 Project Bootstrap — 2026-05-30)
+- `assets/icons/icon_prod.png`, `icon_dev.png`, `icon_staging.png` — Generated premium icons for each flavor
+- `lib/main_dev.dart`, `lib/main_staging.dart`, `lib/main_prod.dart` — Entry point files for each flavor
+- `lib/core/routes/app_routes.dart` — App route constants
+- `lib/features/home/views/home_screen.dart` — Placeholder home screen
+- `android/app/src/dev/AndroidManifest.xml`, `android/app/src/staging/AndroidManifest.xml`, `android/app/src/prod/AndroidManifest.xml` — Flavor manifest overlays enforcing backup exclusion
+
+### Changed (Phase 1.1 Project Bootstrap — 2026-05-30)
+- Flutter project initialized with FVM and pinned to SDK version 3.44.0 (stable)
+- `pubspec.yaml` updated with pinned dependency versions (`get`, `firebase_core`, `flutter_flavorizr` and configuration)
+- `analysis_options.yaml` updated with strict linter rules
+- `android/app/build.gradle.kts` updated to configure Android product flavors (`dev`, `staging`, `prod`), package IDs, dynamic app names, minSdkVersion 26, and enable resValues
+- `ios/Runner.xcodeproj/project.pbxproj` updated to set IPHONEOS_DEPLOYMENT_TARGET = 15.0
+- `lib/app.dart` updated to use GetMaterialApp with a placeholder home route mapping to HomeScreen
+- `test/widget_test.dart` updated with a smoke widget test asserting App renders without crashing
+- `README.md` and `docs/12_phase1_implementation_plan.md` updated to mark Phase 1.1 complete
+
 ### Added (Phase 0 Closure & Phase 1.1 Planning — 2026-05-30)
 - `docs/13_phase1_1_bootstrap_plan.md` — Detailed Phase 1.1 Project Bootstrap implementation plan
 
