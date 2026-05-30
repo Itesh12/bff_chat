@@ -35,7 +35,7 @@ class ThemeSandboxScreen extends StatelessWidget {
               elevation: 0,
               shape: const RoundedRectangleBorder(
                 borderRadius: AppRadius.large,
-                side: BorderSide(color: Colors.transparent),
+                side: BorderSide.none,
               ),
               child: Container(
                 decoration: BoxDecoration(
@@ -114,18 +114,18 @@ class ThemeSandboxScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _colorBlock('Primary Accent (Slate Blue)', theme.colorScheme.primary),
-                  _colorBlock('Secondary Accent (Muted Amber)', theme.colorScheme.secondary),
-                  _colorBlock('Vault Status Locked', customColors.vaultStatusLocked),
-                  _colorBlock('Vault Status Unlocked', customColors.vaultStatusUnlocked),
+                  _colorBlock(theme, 'Primary Accent (Slate Blue)', theme.colorScheme.primary),
+                  _colorBlock(theme, 'Secondary Accent (Muted Amber)', theme.colorScheme.secondary),
+                  _colorBlock(theme, 'Vault Status Locked', customColors.vaultStatusLocked),
+                  _colorBlock(theme, 'Vault Status Unlocked', customColors.vaultStatusUnlocked),
                   const Divider(height: AppSpacing.s24),
                   const Text('Semantic Colors', style: AppTypography.titleMedium),
                   const SizedBox(height: AppSpacing.s12),
-                  _colorBlock('Success', customColors.success),
-                  _colorBlock('Warning', customColors.warning),
-                  _colorBlock('Error', customColors.error),
-                  _colorBlock('Info', customColors.info),
-                  _colorBlock('Disabled', customColors.disabled),
+                  _colorBlock(theme, 'Success', customColors.success),
+                  _colorBlock(theme, 'Warning', customColors.warning),
+                  _colorBlock(theme, 'Error', customColors.error),
+                  _colorBlock(theme, 'Info', customColors.info),
+                  _colorBlock(theme, 'Disabled', customColors.disabled),
                 ],
               ),
             ),
@@ -159,13 +159,13 @@ class ThemeSandboxScreen extends StatelessWidget {
                       Chip(
                         label: const Text('Design System'),
                         backgroundColor: customColors.info.withValues(alpha: 0.1),
-                        labelStyle: TextStyle(color: customColors.info),
+                        labelStyle: AppTypography.labelMedium.copyWith(color: customColors.info),
                       ),
                       const SizedBox(width: AppSpacing.s8),
                       Chip(
                         label: const Text('MemoVault'),
                         backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-                        labelStyle: TextStyle(color: theme.colorScheme.primary),
+                        labelStyle: AppTypography.labelMedium.copyWith(color: theme.colorScheme.primary),
                       ),
                     ],
                   ),
@@ -178,7 +178,7 @@ class ThemeSandboxScreen extends StatelessWidget {
     );
   }
 
-  Widget _colorBlock(String name, Color color) {
+  Widget _colorBlock(ThemeData theme, String name, Color color) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
       child: Row(
@@ -189,7 +189,7 @@ class ThemeSandboxScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: color,
               borderRadius: AppRadius.small,
-              border: Border.all(color: Colors.black26),
+              border: Border.all(color: theme.dividerColor),
             ),
           ),
           const SizedBox(width: AppSpacing.s12),

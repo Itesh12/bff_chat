@@ -336,3 +336,56 @@ Binary size tradeoff is acceptable given the significant query capability and sc
 - Generated files (`*.g.dart`) must be committed
 - Run `dart run build_runner build --delete-conflicting-outputs` after schema changes
 - No Hive dependency in `pubspec.yaml`
+
+---
+
+## ADR-010 — Theme & Design Compliance Rules
+
+**Status:** Accepted
+
+**Context:**
+A common failure in software development is the drift between a defined design system and its actual usage. Creating centralized token classes (for spacing, radius, durations, typography, and colors) has no value if developers continue to hardcode layout margins, corner shapes, transitions, colors, and styles throughout screens and custom widgets. We need explicit, statically checked rules to prevent design system drift from day one.
+
+**Decision:**
+Formalize design system compliance rules as an Architectural Decision Record:
+
+1. **No Hardcoded Spacing:** Layout margins, paddings, gap dimensions (`SizedBox` sizes) must strictly use constants from `AppSpacing`. Direct double/integer literals (e.g. `16.0`, `12.0`) in widgets are prohibited.
+2. **No Hardcoded Corner Radiuses:** Borders and card shapes must use standard constants and `BorderRadius` instances from `AppRadius` (`small`, `medium`, `large`, `max`). Direct `Radius.circular` or `BorderRadius.circular` usage in widgets is prohibited.
+3. **No Hardcoded Animation Durations:** Component transition and animation settings must use standard values from `AppDurations` (`fast`, `medium`, `slow`).
+4. **No Raw TextStyles:** Custom widget typography must inherit from or reference defined styles in `AppTypography`. Direct instantiations of raw `TextStyle(...)` (except copyWith calls to alter colors/families defined in `AppTypography`) are prohibited.
+5. **No Direct Material Colors:** Direct Material palette references (e.g. `Colors.blue`, `Colors.red`, `Colors.black26`) are prohibited. Colors must resolve dynamically from the active `ThemeData` (e.g. `theme.colorScheme.primary`, `theme.dividerColor`) or custom `ThemeExtension` definitions (`customColors.success`, `customColors.vaultStatusLocked`).
+
+**Rationale:**
+- Prevents design system drift as the codebase expands.
+- Simplifies application-wide visual changes (e.g., changing primary accent or rounding corners can be done in a single location).
+- Establishes a clear boundary: the theme system files are the exclusive authority for raw styling variables.
+
+**Consequences:**
+- New visual features and screen mockups must conform to token definitions by default.
+- Build-phase compliance audits can be run as part of quality gates.
+- Legacy or placeholder views must be refactored to comply with tokens before starting new layers.
+
+---
+
+## ADR-011 — Local Database Encryption Recovery Policy
+
+**Status:** Accepted
+
+**Context:**
+The MemoVault local database (Isar) is fully encrypted using a device-bound 256-bit key stored in hardware-backed Secure Storage. In production scenarios, a device's secure storage can be wiped, the app's credentials deleted, or database headers corrupted. When the encryption key is lost, the local database becomes permanently unrecoverable. We need to decide whether to attempt local recovery (which is cryptographically impossible without the key) or declare a data-loss recovery policy that resets the local database to avoid crash loops, relying on cloud synchronization for data restoration in later phases.
+
+**Decision:**
+Establish a **No Local Recovery** policy for lost or corrupted encryption keys:
+
+1. **Decryption Failure = Local Reset:** If the database throws a decryption/header error on boot, or if the encryption key is missing from Secure Storage but a database file already exists, the application will execute a local reset. The corrupted/unkeyable database files will be physically deleted, a fresh 256-bit key generated and stored, and a blank database created.
+2. **Cloud-First Recovery:** The official recovery path for user data (notes, messages, configurations) is remote backup and synchronization via Cloud Firestore (scheduled for Phase 2+). Local storage is treated as a local cache/vault; the system makes no attempt to recover local records if the cryptographic key is destroyed.
+
+**Rationale:**
+- Decrypting an AES-256-GCM database without its key is cryptographically impossible.
+- Throwing unhandled errors on launch leads to fatal crash loops, ruining the user experience.
+- Resetting the database ensures the application remains functional and lets the user re-authenticate to sync their records from the cloud.
+
+**Consequences:**
+- Wiping the local database causes data loss for any records that have not yet been synced to the cloud.
+- Safe logging must record database resets without exposing any private user data.
+- The startup bootstrap sequence must handle Isar boot failures gracefully, ensuring the wipe and re-initialize flow executes.

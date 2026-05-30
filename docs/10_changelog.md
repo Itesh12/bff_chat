@@ -8,8 +8,30 @@
 
 ## [Unreleased]
 
+### Added (Phase 1.4 Storage Layer — 2026-05-30)
+- `docs/16_phase1_4_storage_layer_plan.md` — Detailed implementation plan for Phase 1.4 Storage Layer
+- `lib/core/services/preferences_service.dart` — PreferencesService abstract interface
+- `lib/core/services/preferences_service_impl.dart` — Implementation of PreferencesService using SharedPreferencesAsync
+- `lib/core/services/secure_storage_service.dart` — SecureStorageService abstract interface
+- `lib/core/services/secure_storage_service_impl.dart` — Implementation of SecureStorageService using FlutterSecureStorage
+- `lib/core/services/isar_service.dart` — IsarService managing database initialization, verification, and ADR-011 recovery flows
+- `lib/data/models/system_metadata.dart` — Isar collection for storing system-wide config key-values (e.g. key_verification)
+- `lib/domain/repositories/local_repository.dart` — Illustrative example repository interface
+- `test/core/storage/preferences_service_test.dart` — Unit tests for PreferencesServiceImpl
+- `test/core/storage/secure_storage_service_test.dart` — Unit tests for SecureStorageServiceImpl
+- `test/core/storage/isar_service_test.dart` — Unit tests for IsarService and ADR-011 recovery wipe flows
+- `isar.dll` — Pinned DLL library for running Isar database in local desktop unit tests
+
+### Changed (Phase 1.4 Storage Layer — 2026-05-30)
+- `docs/04_architecture_decisions.md` — Appended ADR-011 Local Database Encryption Recovery Policy
+- `pubspec.yaml` — Added `isar`, `isar_flutter_libs`, `flutter_secure_storage`, `shared_preferences`, and `path_provider` dependencies, and `shared_preferences_platform_interface` as dev dependency
+- `lib/main_dev.dart`, `lib/main_staging.dart`, `lib/main_prod.dart` — Updated startup sequence to bootstrap and register PreferencesService, SecureStorageService, and IsarService
+- `lib/core/bindings/initial_binding.dart` — Registered storage singletons permanently
+- `docs/12_phase1_implementation_plan.md` and `docs/03_development_roadmap.md` — Updated status tables to mark Checkpoint 1.4 complete
+
 ### Added (Phase 1.3 Theme & Design System — 2026-05-30)
 - `docs/15_phase1_3_theme_design_system_plan.md` — Detailed implementation plan for Phase 1.3 Theme & Design System
+- `docs/15_1_theme_compliance_audit.md` — Design system compliance audit and refactoring log
 - `lib/core/theme/app_spacing.dart` — Design tokens for layout spacing (multiples of 4dp)
 - `lib/core/theme/app_radius.dart` — Design tokens for corner border radiuses (small, medium, large, max)
 - `lib/core/theme/app_durations.dart` — Design tokens for animation transitions (fast, medium, slow)
@@ -22,6 +44,7 @@
 - `test/core/theme/app_color_scheme_test.dart` — Unit tests for AppColorScheme copyWith and lerp interpolations
 
 ### Changed (Phase 1.3 Theme & Design System — 2026-05-30)
+- `docs/04_architecture_decisions.md` — Appended ADR-010 Theme & Design Compliance Rules
 - `lib/app.dart` — Updated to register ThemeService early in App.build and bind light/dark theme parameters to GetMaterialApp
 - `lib/core/bindings/initial_binding.dart` — Removed duplicate ThemeService registration
 - `lib/core/routes/app_routes.dart` and `lib/core/routes/app_pages.dart` — Added route constants and mapping for the ThemeSandboxScreen

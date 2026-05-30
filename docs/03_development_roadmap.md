@@ -50,7 +50,7 @@ Each phase has a clearly defined goal, deliverables, and exit criteria. **No pha
 
 **Goal:** Build the technical skeleton — routing, DI, themes, logging, error handling, environment config.
 
-**Status:** 🟡 In Progress — Phase 1.3 Theme & Design System (Complete — see `docs/15_phase1_3_theme_design_system_plan.md`)
+**Status:** ❌ REOPENED — Phase 1.4 Storage Layer (Chosen storage engine does not satisfy the project's encryption requirements)
 
 ### Deliverables
 

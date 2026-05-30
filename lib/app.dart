@@ -14,8 +14,7 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Register ThemeService early to ensure it is available when themeMode is evaluated.
-    final ThemeService themeService = Get.put(ThemeService(), permanent: true);
+    final ThemeService themeService = Get.find<ThemeService>();
 
     return Obx(() {
       return GetMaterialApp(
