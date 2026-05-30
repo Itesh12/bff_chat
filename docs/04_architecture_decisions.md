@@ -388,4 +388,28 @@ Establish a **No Local Recovery** policy for lost or corrupted encryption keys:
 **Consequences:**
 - Wiping the local database causes data loss for any records that have not yet been synced to the cloud.
 - Safe logging must record database resets without exposing any private user data.
-- The startup bootstrap sequence must handle Isar boot failures gracefully, ensuring the wipe and re-initialize flow executes.
+- The startup bootstrap sequence must handle SQLCipher boot failures gracefully, ensuring the wipe and re-initialize flow executes.
+
+---
+
+## ADR-012: Database Technology Selection
+
+**Context:**
+Phase 1.4 requires establishing a core storage foundation that can securely power a vault-style application with features such as encrypted notes, hidden vaults, encrypted messaging, media encryption, and offline-first synchronization.
+
+**Decision:**
+We have selected **Drift** paired with **SQLCipher** (via sqflite_sqlcipher) as the local storage engine.
+
+Rejected:
+- **Hive**: Excellent for small caches or simple settings, but weak querying capabilities (lack of complex indices, filtering, pagination, reactive updates) make it unsuitable for a production-grade encrypted messenger/vault.
+- **Isar**: While fast and modern, it lacks transparent at-rest encryption and has significant AGP compatibility issues (e.g., AGP 9 namespace errors with isar_flutter_libs).
+
+Selected:
+- **Drift + SQLCipher**
+
+**Rationale:**
+- **True At-Rest Encryption**: SQLCipher natively provides robust AES-256-GCM encryption on disk, preventing raw file data extraction.
+- **Mature Ecosystem**: Drift is a stable, type-safe SQLite ORM that easily integrates with SQLCipher.
+- **Complex Queries**: Fully supports relational data, indexing, and complex queries essential for messaging workloads.
+- **Reactive Streams**: Drift seamlessly supports reactive database streams.
+- **Future Proof**: Solves long-term compatibility requirements (AGP 9+), future messaging, offline synchronization, and secure media metadata handling.
