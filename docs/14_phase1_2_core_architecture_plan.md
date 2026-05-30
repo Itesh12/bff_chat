@@ -142,9 +142,8 @@ import 'package:memovault/core/services/network_service.dart';
 class InitialBinding implements Bindings {
   @override
   void dependencies() {
-    // Register global services as singletons.
-    // Base services are registered lazily but instantiated on startup if required by routing.
-    Get.lazyPut<NetworkService>(() => NetworkService(), fenix: true);
+    // Register global services permanently at startup.
+    Get.put<NetworkService>(NetworkService(), permanent: true);
   }
 }
 ```
