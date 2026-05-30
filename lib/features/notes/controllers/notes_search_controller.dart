@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/domain/notes/note_entity.dart';
 import 'package:memovault/domain/notes/notes_repository.dart';
 
@@ -59,6 +60,10 @@ class NotesSearchController extends GetxController {
     try {
       final searchResults = await _repository.searchNotes(val);
       results.assignAll(searchResults);
+      AppLogger.info('note_searched', metadata: {
+        'query_length': val.length,
+        'results_count': searchResults.length,
+      });
     } catch (_) {
       results.clear();
     } finally {

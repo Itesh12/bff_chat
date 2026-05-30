@@ -516,3 +516,62 @@ Phase 2.0 implements the first user-facing feature on top of the Phase 1 secure 
 - Isolating search controller ensures complete separation of concerns and reduces the risk of covert code leaking into public notes widgets.
 - Pure Dart UUID generation avoids extra external packages.
 
+---
+
+## ADR-015 — Global Design System Components & Versioning
+
+**Status:** Accepted
+
+**Context:**
+As MemoVault expands to support multiple features (Notes, Hidden Access, Vault, Messaging, Media, Settings, Security), creating ad-hoc layout components on individual screens introduces styling drift, duplicate layouts, and visual inconsistencies. We need a strict architectural rule ensuring that every single layout element is built strictly using reusable, tokenized components under `lib/core/design_system/`.
+
+**Decision:**
+
+1. **Forbid Raw Material Primitives in Presentation Views:**
+   No file outside of `lib/core/theme/` and `lib/core/design_system/` may directly instantiate or invoke raw layout widgets or untokenized visual properties.
+
+   | FORBIDDEN (No direct raw usage in features) | ALLOWED (Design system wrappers only) |
+   |---|---|
+   | `ElevatedButton`, `OutlinedButton`, `TextButton` | `AppButton` |
+   | `IconButton` | `AppIconButton` |
+   | `TextField`, `TextFormField` | `AppTextField` |
+   | `SearchBar` (or custom search fields) | `AppSearchBar` |
+   | `SnackBar`, `Get.snackbar` | `AppSnackBar` |
+   | `AlertDialog`, `SimpleDialog` | `AppDialog` |
+   | `showModalBottomSheet` | `AppBottomSheet` |
+   | `Card` | `AppCard` |
+   | `Chip`, `FilterChip`, `ActionChip` | `AppChip` |
+   | `Scaffold`, `AppBar` | `AppScaffold` |
+   | `CircularProgressIndicator` | `AppLoading` |
+   | Direct Spacing/Margin Literals (`16.0`, etc.) | `AppSpacing` tokens (`s4`, `s8`, etc.) |
+   | Direct BorderRadius/Radius Literals | `AppRadius` tokens (`small`, `medium`, etc.) |
+   | Raw `TextStyle` or `theme.textTheme` calls | `AppTypography` tokens |
+   | Direct `Duration(...)` literals | `AppDurations` tokens |
+   | `SizedBox(height: xx)`, `SizedBox(width: xx)` | `AppGap` widgets |
+   | `Color(...)`, `Colors.*` | `context.colors` / theme properties |
+
+2. **Component Versioning & Public API Treatment:**
+   Design system components under `lib/core/design_system/` are treated as locked public APIs. Any breaking changes to component constructors or behavior must strictly require:
+   - Corresponding documentation updates under `docs/design_system/`.
+   - Widget and unit test validation suite updates under `test/core/design_system/`.
+   - Sandbox representation updates in `DesignSystemSandboxScreen`.
+   - Visual impact review of all referencing feature screens.
+
+3. **Reserved Names for Future Components:**
+   We formally reserve the following names for upcoming modules:
+   - `AppAvatar`, `AppBadge`, `AppListTile`, `AppDivider`, `AppSwitch`, `AppDropdown`, `AppImage`.
+
+4. **Automated CI/CD Compliance Enforcer:**
+   To guarantee that ADR-015 is actively enforced rather than merely documented, a CI compliance verification check must be established. The check verifies that no features directly use raw Material layout elements, spacing literals, or manual radius overrides. A script or CI step will fail the build if any search matches are found inside `lib/features/`:
+   - `git grep "ElevatedButton(" lib/features/`
+   - `git grep "TextField(" lib/features/`
+   - `git grep "Card(" lib/features/`
+   - `git grep "AlertDialog(" lib/features/`
+   - `git grep "SizedBox(" lib/features/`
+
+**Consequences:**
+- Guarantees 100% theme compliance across the app.
+- Screens become highly readable compositions of standard semantic layout wrappers.
+- CI/CD enforcer checks will automatically fail if raw primitives or spacing literals are leaked inside feature directories.
+
+

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/features/notes/controllers/notes_controller.dart';
+
 class NoteDetailScreen extends GetView<NotesController> {
   const NoteDetailScreen({super.key});
 
@@ -32,133 +34,107 @@ class NoteDetailScreen extends GetView<NotesController> {
 
     final borderThemeColor = isDark ? Colors.grey[850]! : Colors.grey[200]!;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('View Note'),
+    return Obx(() {
+      final note = controller.notes.firstWhereOrNull((n) => n.id == id);
+      if (note == null) {
+        return const AppScaffold(
+          title: 'View Note',
+          body: Center(child: Text('Note not found.')),
+        );
+      }
+
+      final category = controller.categories.firstWhereOrNull((c) => c.id == note.categoryId);
+      final categoryColor = _parseCategoryColor(category?.colorHex);
+
+      return AppScaffold(
+        title: 'View Note',
         actions: [
-          Obx(() {
-            final note = controller.notes.firstWhereOrNull((n) => n.id == id);
-            if (note == null) return const SizedBox.shrink();
-            return IconButton(
-              icon: Icon(
-                note.isFavorite ? Icons.star : Icons.star_border,
-                color: note.isFavorite ? Colors.amber : null,
-              ),
-              onPressed: () => controller.toggleFavorite(note.id),
-            );
-          }),
-          Obx(() {
-            final note = controller.notes.firstWhereOrNull((n) => n.id == id);
-            if (note == null) return const SizedBox.shrink();
-            return IconButton(
-              icon: const Icon(Icons.archive_outlined),
-              onPressed: () {
-                controller.archiveNote(note.id);
-                Get.back();
-                Get.snackbar('Archived', 'Note moved to archive.');
-              },
-            );
-          }),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
+          AppIconButton.secondary(
+            icon: note.isFavorite ? Icons.star : Icons.star_border,
+            tooltip: 'Favorite',
+            onPressed: () => controller.toggleFavorite(note.id),
+          ),
+          const AppGap.h8(),
+          AppIconButton.secondary(
+            icon: Icons.archive_outlined,
+            tooltip: 'Archive Note',
             onPressed: () {
-              if (id != null) {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Delete Note?'),
-                    content: const Text('This will move your note to trash. You can restore it later from archive.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          controller.softDeleteNote(id);
-                          Navigator.pop(context);
-                          Get.back();
-                          Get.snackbar('Deleted', 'Note moved to trash.');
-                        },
-                        child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                      ),
-                    ],
-                  ),
-                );
-              }
+              controller.archiveNote(note.id);
+              Get.back();
+              AppSnackBar.success(title: 'Archived', message: 'Note moved to archive.');
             },
           ),
+          const AppGap.h8(),
+          AppIconButton.danger(
+            icon: Icons.delete_outline,
+            tooltip: 'Delete Note',
+            onPressed: () {
+              AppDialog.delete(
+                context,
+                title: 'Delete Note?',
+                message: 'This will move your note to trash. You can restore it later from archive.',
+                onDelete: () {
+                  controller.softDeleteNote(note.id);
+                  Get.back();
+                  AppSnackBar.success(title: 'Deleted', message: 'Note moved to trash.');
+                },
+              );
+            },
+          ),
+          const AppGap.h12(),
         ],
-      ),
-      body: Obx(() {
-        final note = controller.notes.firstWhereOrNull((n) => n.id == id);
-        if (note == null) {
-          return const Center(child: Text('Note not found.'));
-        }
-
-        final category = controller.categories.firstWhereOrNull((c) => c.id == note.categoryId);
-        final categoryColor = _parseCategoryColor(category?.colorHex);
-
-        return Column(
+        body: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24, vertical: AppSpacing.s16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Category Tag if active
                     if (category != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: categoryColor.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          category.name,
-                          style: TextStyle(
-                            color: categoryColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
+                      AppChip(
+                        label: category.name,
+                        color: categoryColor,
                       ),
-                      const SizedBox(height: 16),
+                      const AppGap.v16(),
                     ],
 
                     // Note Title
                     SelectableText(
                       note.title.isEmpty ? 'Untitled' : note.title,
-                      style: theme.textTheme.headlineMedium?.copyWith(
+                      style: AppTypography.displayLarge.copyWith(
                         fontWeight: FontWeight.bold,
                         color: note.title.isEmpty
-                            ? theme.textTheme.headlineMedium?.color?.withOpacity(0.3)
+                            ? theme.textTheme.displayLarge?.color?.withValues(alpha: 0.3)
                             : null,
                       ),
                     ),
                     
-                    const SizedBox(height: 8),
+                    const AppGap.v8(),
 
                     // Timestamp indicator
                     Text(
                       'Last saved: ${_formatDateTime(note.updatedAt)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.textTheme.bodySmall?.color?.withOpacity(0.4),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
                       ),
                     ),
 
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 16),
+                    const AppGap.v24(),
+                    Container(
+                      height: 1,
+                      color: borderThemeColor,
+                    ),
+                    const AppGap.v16(),
 
                     // Note Body Content
                     SelectableText(
                       note.body.isEmpty ? 'No content' : note.body,
-                      style: theme.textTheme.bodyLarge?.copyWith(
+                      style: AppTypography.bodyLarge.copyWith(
                         height: 1.6,
                         color: note.body.isEmpty
-                            ? theme.textTheme.bodyLarge?.color?.withOpacity(0.3)
+                            ? theme.textTheme.bodyLarge?.color?.withValues(alpha: 0.3)
                             : null,
                       ),
                     ),
@@ -169,7 +145,7 @@ class NoteDetailScreen extends GetView<NotesController> {
 
             // Metadata footer
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24, vertical: AppSpacing.s16),
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: borderThemeColor, width: 1)),
               ),
@@ -178,16 +154,16 @@ class NoteDetailScreen extends GetView<NotesController> {
                 children: [
                   Text(
                     'Created: ${_formatDateTime(note.createdAt)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.4),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
                       fontSize: 10,
                     ),
                   ),
                   if (note.lastOpenedAt != null)
                     Text(
                       'Last viewed: ${_formatDateTime(note.lastOpenedAt!)}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.textTheme.bodySmall?.color?.withOpacity(0.4),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
                         fontSize: 10,
                       ),
                     ),
@@ -195,12 +171,13 @@ class NoteDetailScreen extends GetView<NotesController> {
               ),
             ),
           ],
-        );
-      }),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Get.toNamed('/notes/editor', arguments: id),
-        child: const Icon(Icons.edit),
-      ),
-    );
+        ),
+        floatingActionButton: AppButton.primary(
+          text: 'Edit Note',
+          icon: Icons.edit,
+          onPressed: () => Get.toNamed('/notes/editor', arguments: id),
+        ),
+      );
+    });
   }
 }

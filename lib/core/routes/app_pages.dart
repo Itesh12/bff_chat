@@ -19,7 +19,7 @@ abstract final class AppPages {
     ),
     GetPage(
       name: AppRoutes.themeSandbox,
-      page: () => const ThemeSandboxScreen(),
+      page: () => const DesignSystemSandboxScreen(),
     ),
     GetPage(
       name: AppRoutes.notes,

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/core/widgets/note_card.dart';
-import 'package:memovault/core/widgets/empty_state_widget.dart';
-import 'package:memovault/core/widgets/search_bar_widget.dart';
+import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/features/notes/controllers/notes_controller.dart';
 import 'package:memovault/features/notes/controllers/notes_search_controller.dart';
 
@@ -23,7 +22,6 @@ class _NotesSearchScreenState extends State<NotesSearchScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-focus keyboard on open
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
@@ -38,16 +36,14 @@ class _NotesSearchScreenState extends State<NotesSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Search Notes'),
-      ),
+    return AppScaffold(
+      title: 'Search Notes',
       body: Column(
         children: [
           // Dynamic Search bar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: SearchBarWidget(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
+            child: AppTextField.search(
               controller: _textController,
               focusNode: _focusNode,
               hintText: 'Type at least 2 characters...',
@@ -64,7 +60,7 @@ class _NotesSearchScreenState extends State<NotesSearchScreen> {
               final results = searchController.results;
 
               if (query.length < 2) {
-                return const EmptyStateWidget(
+                return const AppEmptyState(
                   icon: Icons.search,
                   title: 'Search in MemoVault',
                   message: 'Enter 2 or more characters to scan title and body contents.',
@@ -72,11 +68,11 @@ class _NotesSearchScreenState extends State<NotesSearchScreen> {
               }
 
               if (isSearching) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: AppLoading.medium());
               }
 
               if (results.isEmpty) {
-                return EmptyStateWidget(
+                return AppEmptyState(
                   icon: Icons.find_in_page_outlined,
                   title: 'No Results Match',
                   message: 'No notes match the query "$query". Try searching for different keywords.',
@@ -84,7 +80,7 @@ class _NotesSearchScreenState extends State<NotesSearchScreen> {
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12, vertical: AppSpacing.s4),
                 itemCount: results.length,
                 itemBuilder: (context, index) {
                   final note = results[index];
@@ -96,7 +92,7 @@ class _NotesSearchScreenState extends State<NotesSearchScreen> {
                     category: cat,
                     isGrid: false,
                     onTap: () {
-                      notesController.viewNoteDetail(note.id); // updates lastOpenedAt + logsOpened
+                      notesController.viewNoteDetail(note.id);
                       Get.toNamed('/notes/detail/${note.id}');
                     },
                     onFavoriteTap: () => notesController.toggleFavorite(note.id),

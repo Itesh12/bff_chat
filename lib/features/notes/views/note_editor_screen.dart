@@ -5,6 +5,7 @@ import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/domain/notes/note_entity.dart';
 import 'package:memovault/domain/notes/category_entity.dart';
 import 'package:memovault/domain/notes/note_metrics.dart';
+import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/features/notes/controllers/notes_controller.dart';
 
 class NoteEditorScreen extends StatefulWidget {
@@ -48,7 +49,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   void _initializeNote() {
     if (_noteId != null) {
-      // Edit mode: fetch note
       final note = _notesController.notes.firstWhereOrNull((n) => n.id == _noteId);
       if (note != null) {
         _existingNote = note;
@@ -78,7 +78,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
 
-    // If completely empty, do not create a database entry yet
     if (title.isEmpty && body.isEmpty) {
       return;
     }
@@ -91,7 +90,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
     try {
       if (_existingNote == null) {
-        // Create new note
         final newNote = await _notesController.createNote(
           title: title,
           body: body,
@@ -101,7 +99,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         _noteId = newNote.id;
         AppLogger.debug('note_autosaved', metadata: {'note_id': 'REDACTED'});
       } else {
-        // Update existing note
         final updatedNote = _existingNote!.copyWith(
           title: title,
           body: body,
@@ -130,93 +127,85 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 
   void _showCategoryPicker() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        final theme = Theme.of(context);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final theme = Theme.of(context);
+    AppBottomSheet.show(
+      context,
+      title: 'Assign Category',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppCard(
+            margin: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
+            onTap: () {
+              _selectCategory(null);
+              Navigator.pop(context);
+            },
+            child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'Assign Category',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                Icon(Icons.label_off, color: theme.iconTheme.color?.withValues(alpha: 0.6)),
+                const AppGap.h16(),
+                const Expanded(
+                  child: Text('Uncategorized', style: AppTypography.bodyMedium),
                 ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: const Icon(Icons.label_off),
-                  title: const Text('Uncategorized'),
-                  trailing: _selectedCategoryId == null ? const Icon(Icons.check) : null,
-                  onTap: () {
-                    _selectCategory(null);
-                    Navigator.pop(context);
-                  },
-                ),
-                const Divider(),
-                Expanded(
-                  child: Obx(() {
-                    final cats = _notesController.categories;
-                    if (cats.isEmpty) {
-                      return const Center(
-                        child: Text('No categories. Go to Settings to create one.'),
-                      );
-                    }
-                    return ListView.builder(
-                      itemCount: cats.length,
-                      itemBuilder: (context, index) {
-                        final cat = cats[index];
-                        final isSelected = _selectedCategoryId == cat.id;
-                        final color = Color(int.parse('FF${cat.colorHex}', radix: 16));
-                        
-                        return ListTile(
-                          leading: CircleAvatar(
-                            radius: 10,
-                            backgroundColor: color,
-                          ),
-                          title: Text(cat.name),
-                          trailing: isSelected ? const Icon(Icons.check) : null,
-                          onTap: () {
-                            _selectCategory(cat);
-                            Navigator.pop(context);
-                          },
-                        );
-                      },
-                    );
-                  }),
-                ),
+                if (_selectedCategoryId == null)
+                  Icon(Icons.check, color: theme.primaryColor),
               ],
             ),
           ),
-        );
-      },
+          const AppGap.v8(),
+          SizedBox(
+            height: 200,
+            child: Obx(() {
+              final cats = _notesController.categories;
+              if (cats.isEmpty) {
+                return const Center(
+                  child: Text('No categories created yet.'),
+                );
+              }
+              return ListView.builder(
+                itemCount: cats.length,
+                itemBuilder: (context, index) {
+                  final cat = cats[index];
+                  final isSelected = _selectedCategoryId == cat.id;
+                  final color = Color(int.parse('FF${cat.colorHex}', radix: 16));
+                  
+                  return AppCard(
+                    margin: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
+                    onTap: () {
+                      _selectCategory(cat);
+                      Navigator.pop(context);
+                    },
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 8,
+                          backgroundColor: color,
+                        ),
+                        const AppGap.h16(),
+                        Expanded(
+                          child: Text(cat.name, style: AppTypography.bodyMedium),
+                        ),
+                        if (isSelected)
+                          Icon(Icons.check, color: theme.primaryColor),
+                      ],
+                    ),
+                  );
+                },
+              );
+            }),
+          ),
+        ],
+      ),
     );
   }
 
   Future<bool> _onWillPop() async {
-    // Exiting editor: wait for any pending save to complete
     _debounceTimer?.cancel();
     await _saveNote();
-
-    final title = _titleController.text.trim();
-    final body = _bodyController.text.trim();
-
-    // If a new note was started but never got any contents, prompt discard or silent exit
-    if (_existingNote == null && title.isEmpty && body.isEmpty) {
-      return true; // Silence exit, nothing to discard
-    }
-
-    return true; // Auto-saved successfully, always allow exit
+    return true; 
   }
 
   @override
@@ -227,94 +216,92 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final toolbarBg = isDark ? Colors.grey[950]! : Colors.grey[50]!;
     final toolbarBorder = isDark ? Colors.grey[900]! : Colors.grey[200]!;
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(_existingNote == null ? 'New Note' : 'Edit Note'),
-          actions: [
-            Obx(() {
-              final activeCategory = _notesController.categories
-                  .firstWhereOrNull((c) => c.id == _selectedCategoryId);
-              final color = activeCategory != null
-                  ? Color(int.parse('FF${activeCategory.colorHex}', radix: 16))
-                  : Colors.grey;
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) {
+          await _onWillPop();
+        }
+      },
+      child: AppScaffold(
+        title: _existingNote == null ? 'New Note' : 'Edit Note',
+        actions: [
+          Obx(() {
+            final activeCategory = _notesController.categories
+                .firstWhereOrNull((c) => c.id == _selectedCategoryId);
+            final color = activeCategory != null
+                ? Color(int.parse('FF${activeCategory.colorHex}', radix: 16))
+                : Colors.grey;
 
-              return TextButton.icon(
-                onPressed: _showCategoryPicker,
-                icon: CircleAvatar(
-                  radius: 6,
-                  backgroundColor: color,
-                ),
-                label: Text(
-                  activeCategory?.name ?? 'Category',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: activeCategory != null ? color : null,
+            return Center(
+              child: GestureDetector(
+                onTap: _showCategoryPicker,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 6,
+                        backgroundColor: color,
+                      ),
+                      const AppGap.h8(),
+                      Text(
+                        activeCategory?.name ?? 'Category',
+                        style: AppTypography.bodyMedium.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: activeCategory != null ? color : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            }),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16.0),
-                child: SizedBox(
-                  height: 16,
-                  width: 16,
-                  child: _isSaving
-                      ? const CircularProgressIndicator(strokeWidth: 2)
-                      : Icon(
-                          Icons.check_circle_outline,
-                          size: 18,
-                          color: theme.primaryColor.withOpacity(0.6),
-                        ),
-                ),
+              ),
+            );
+          }),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.s16),
+              child: SizedBox(
+                height: 16,
+                width: 16,
+                child: _isSaving
+                    ? const AppLoading.small()
+                    : Icon(
+                        Icons.check_circle_outline,
+                        size: 18,
+                        color: theme.primaryColor.withValues(alpha: 0.6),
+                      ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
         body: Column(
           children: [
             // Note Title Input
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: TextField(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.s16, AppSpacing.s16, AppSpacing.s16, AppSpacing.s4),
+              child: AppTextField(
                 controller: _titleController,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                decoration: const InputDecoration(
-                  hintText: 'Note Title',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: Colors.grey),
-                ),
+                hintText: 'Note Title',
+                borderless: true,
               ),
             ),
             
             // Divider
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Divider(color: toolbarBorder),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
+              child: Container(height: 1, color: toolbarBorder),
             ),
 
             // Note Body Input
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: TextField(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
+                child: AppTextField.multiline(
                   controller: _bodyController,
-                  maxLines: null,
-                  expands: true,
-                  keyboardType: TextInputType.multiline,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    height: 1.5,
-                  ),
-                  decoration: const InputDecoration(
-                    hintText: 'Start writing...',
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(color: Colors.grey),
-                  ),
+                  hintText: 'Start writing...',
+                  borderless: true,
                 ),
               ),
             ),
@@ -326,21 +313,21 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 color: toolbarBg,
                 border: Border(top: BorderSide(color: toolbarBorder, width: 1.0)),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     '$_wordCount ${_wordCount == 1 ? 'word' : 'words'}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
                     ),
                   ),
                   if (_existingNote != null)
                     Text(
                       'Revision ${_existingNote!.revision}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.primaryColor.withOpacity(0.7),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: theme.primaryColor.withValues(alpha: 0.7),
                         fontWeight: FontWeight.bold,
                       ),
                     ),

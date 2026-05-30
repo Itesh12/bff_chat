@@ -3,91 +3,86 @@ import 'package:get/get.dart';
 import 'package:memovault/core/services/notes_preferences_service.dart';
 import 'package:memovault/domain/notes/note_sort_mode.dart';
 import 'package:memovault/core/widgets/note_card.dart';
-import 'package:memovault/core/widgets/empty_state_widget.dart';
-import 'package:memovault/core/widgets/search_bar_widget.dart';
+import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/features/notes/controllers/notes_controller.dart';
 
 class NotesDashboardScreen extends GetView<NotesController> {
   const NotesDashboardScreen({super.key});
 
   void _showSortBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        final theme = Theme.of(context);
-        return Obx(() {
-          final currentSort = controller.sortMode.value;
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'Sort Notes By',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ...NoteSortMode.values.map((mode) {
-                  String label = '';
-                  IconData icon = Icons.sort;
-                  switch (mode) {
-                    case NoteSortMode.updatedDesc:
-                      label = 'Recently edited first';
-                      icon = Icons.edit_calendar;
-                      break;
-                    case NoteSortMode.updatedAsc:
-                      label = 'Oldest edited first';
-                      icon = Icons.history;
-                      break;
-                    case NoteSortMode.createdDesc:
-                      label = 'Recently created first';
-                      icon = Icons.calendar_today;
-                      break;
-                    case NoteSortMode.createdAsc:
-                      label = 'Oldest created first';
-                      icon = Icons.calendar_month;
-                      break;
-                    case NoteSortMode.titleAZ:
-                      label = 'Title: A to Z';
-                      icon = Icons.sort_by_alpha;
-                      break;
-                    case NoteSortMode.titleZA:
-                      label = 'Title: Z to A';
-                      icon = Icons.sort_by_alpha_outlined;
-                      break;
-                  }
+    final theme = Theme.of(context);
+    AppBottomSheet.show(
+      context,
+      title: 'Sort Notes By',
+      child: Obx(() {
+        final currentSort = controller.sortMode.value;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: NoteSortMode.values.map((mode) {
+            String label = '';
+            IconData icon = Icons.sort;
+            switch (mode) {
+              case NoteSortMode.updatedDesc:
+                label = 'Recently edited first';
+                icon = Icons.edit_calendar;
+                break;
+              case NoteSortMode.updatedAsc:
+                label = 'Oldest edited first';
+                icon = Icons.history;
+                break;
+              case NoteSortMode.createdDesc:
+                label = 'Recently created first';
+                icon = Icons.calendar_today;
+                break;
+              case NoteSortMode.createdAsc:
+                label = 'Oldest created first';
+                icon = Icons.calendar_month;
+                break;
+              case NoteSortMode.titleAZ:
+                label = 'Title: A to Z';
+                icon = Icons.sort_by_alpha;
+                break;
+              case NoteSortMode.titleZA:
+                label = 'Title: Z to A';
+                icon = Icons.sort_by_alpha_outlined;
+                break;
+            }
 
-                  final isSelected = currentSort == mode;
-                  return ListTile(
-                    leading: Icon(icon, color: isSelected ? theme.primaryColor : null),
-                    title: Text(
+            final isSelected = currentSort == mode;
+            return AppCard(
+              margin: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
+              backgroundColor: isSelected ? theme.primaryColor.withValues(alpha: 0.1) : null,
+              borderColor: isSelected ? theme.primaryColor.withValues(alpha: 0.3) : null,
+              onTap: () {
+                controller.setSortMode(mode);
+                Navigator.pop(context);
+              },
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    color: isSelected ? theme.primaryColor : theme.iconTheme.color?.withValues(alpha: 0.6),
+                  ),
+                  const AppGap.h16(),
+                  Expanded(
+                    child: Text(
                       label,
-                      style: TextStyle(
+                      style: AppTypography.bodyMedium.copyWith(
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? theme.primaryColor : null,
+                        color: isSelected ? theme.primaryColor : theme.textTheme.bodyMedium?.color,
                       ),
                     ),
-                    trailing: isSelected ? Icon(Icons.check, color: theme.primaryColor) : null,
-                    onTap: () {
-                      controller.setSortMode(mode);
-                      Navigator.pop(context);
-                    },
-                  );
-                }),
-              ],
-            ),
-          );
-        });
-      },
+                  ),
+                  if (isSelected)
+                    Icon(Icons.check, color: theme.primaryColor),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      }),
     );
   }
 
@@ -95,43 +90,37 @@ class NotesDashboardScreen extends GetView<NotesController> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final appBar = AppBar(
-      title: const Text(
-        'MemoVault',
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
+    return AppScaffold(
+      title: 'MemoVault',
       actions: [
-        IconButton(
-          icon: const Icon(Icons.settings),
-          onPressed: () {
-            // Placeholder: Navigate to settings or custom category screen
-            Get.toNamed('/notes/categories');
-          },
+        AppIconButton.secondary(
+          icon: Icons.settings,
+          tooltip: 'Manage Categories',
+          onPressed: () => Get.toNamed('/notes/categories'),
         ),
-        IconButton(
-          icon: const Icon(Icons.archive),
-          onPressed: () {
-            Get.toNamed('/notes/archive');
-          },
+        const AppGap.h8(),
+        AppIconButton.secondary(
+          icon: Icons.archive,
+          tooltip: 'Archived Notes',
+          onPressed: () => Get.toNamed('/notes/archive'),
         ),
+        const AppGap.h8(),
         Obx(() {
           final isGrid = controller.viewMode.value == NotesViewMode.grid;
-          return IconButton(
-            icon: Icon(isGrid ? Icons.view_list : Icons.grid_view),
+          return AppIconButton.secondary(
+            icon: isGrid ? Icons.view_list : Icons.grid_view,
+            tooltip: isGrid ? 'List View' : 'Grid View',
             onPressed: () => controller.toggleViewMode(),
           );
         }),
+        const AppGap.h12(),
       ],
-    );
-
-    return Scaffold(
-      appBar: appBar,
       body: Column(
         children: [
           // 1. Top Search Bar Trigger
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: SearchBarWidget(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.s16, AppSpacing.s12, AppSpacing.s16, AppSpacing.s8),
+            child: AppSearchBar(
               readOnly: true,
               onTap: () => Get.toNamed('/notes/search'),
             ),
@@ -145,18 +134,22 @@ class NotesDashboardScreen extends GetView<NotesController> {
             return SizedBox(
               height: 48,
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
                 scrollDirection: Axis.horizontal,
                 itemCount: categoriesList.length + 1,
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     final isSelected = activeCat == null;
                     return Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: FilterChip(
-                        selected: isSelected,
-                        label: const Text('All Notes'),
-                        onSelected: (_) => controller.setSelectedCategory(null),
+                      padding: const EdgeInsets.only(right: AppSpacing.s8),
+                      child: Center(
+                        child: GestureDetector(
+                          onTap: () => controller.setSelectedCategory(null),
+                          child: AppChip(
+                            label: 'All Notes',
+                            color: isSelected ? theme.primaryColor : Colors.grey,
+                          ),
+                        ),
                       ),
                     );
                   }
@@ -166,17 +159,15 @@ class NotesDashboardScreen extends GetView<NotesController> {
                   final color = Color(int.parse('FF${cat.colorHex}', radix: 16));
 
                   return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: FilterChip(
-                      selected: isSelected,
-                      avatar: CircleAvatar(
-                        radius: 6,
-                        backgroundColor: color,
+                    padding: const EdgeInsets.only(right: AppSpacing.s8),
+                    child: Center(
+                      child: GestureDetector(
+                        onTap: () => controller.setSelectedCategory(cat.id),
+                        child: AppChip(
+                          label: cat.name,
+                          color: isSelected ? color : color.withValues(alpha: 0.4),
+                        ),
                       ),
-                      label: Text(cat.name),
-                      selectedColor: color.withOpacity(0.15),
-                      checkmarkColor: color,
-                      onSelected: (_) => controller.setSelectedCategory(cat.id),
                     ),
                   );
                 },
@@ -186,7 +177,7 @@ class NotesDashboardScreen extends GetView<NotesController> {
 
           // 3. Sub-header with Note Count and Sorting Button
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -194,15 +185,15 @@ class NotesDashboardScreen extends GetView<NotesController> {
                   final total = controller.filteredNotes.length;
                   return Text(
                     '$total ${total == 1 ? 'note' : 'notes'}',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
                     ),
                   );
                 }),
-                IconButton(
-                  icon: const Icon(Icons.sort),
+                AppIconButton.secondary(
+                  icon: Icons.sort,
+                  tooltip: 'Sort Options',
                   onPressed: () => _showSortBottomSheet(context),
-                  visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
@@ -212,12 +203,12 @@ class NotesDashboardScreen extends GetView<NotesController> {
           Expanded(
             child: Obx(() {
               if (controller.isLoading.value) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: AppLoading.medium());
               }
 
               final displayNotes = controller.filteredNotes;
               if (displayNotes.isEmpty) {
-                return EmptyStateWidget(
+                return AppEmptyState(
                   icon: Icons.note_alt_outlined,
                   title: 'No Notes Found',
                   message: controller.selectedCategoryId.value == null
@@ -232,12 +223,12 @@ class NotesDashboardScreen extends GetView<NotesController> {
 
               if (isGrid) {
                 return GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12, vertical: AppSpacing.s4),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     childAspectRatio: 0.85,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    crossAxisSpacing: AppSpacing.s8,
+                    mainAxisSpacing: AppSpacing.s8,
                   ),
                   itemCount: displayNotes.length,
                   itemBuilder: (context, index) {
@@ -258,7 +249,7 @@ class NotesDashboardScreen extends GetView<NotesController> {
                 );
               } else {
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12, vertical: AppSpacing.s4),
                   itemCount: displayNotes.length,
                   itemBuilder: (context, index) {
                     final note = displayNotes[index];
@@ -281,10 +272,10 @@ class NotesDashboardScreen extends GetView<NotesController> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: AppButton.primary(
+        text: 'New Note',
+        icon: Icons.add,
         onPressed: () => Get.toNamed('/notes/editor'),
-        icon: const Icon(Icons.add),
-        label: const Text('New Note'),
       ),
     );
   }
