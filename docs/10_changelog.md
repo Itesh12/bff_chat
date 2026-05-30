@@ -8,6 +8,25 @@
 
 ## [Unreleased]
 
+### Added (Phase 1.3 Theme & Design System — 2026-05-30)
+- `docs/15_phase1_3_theme_design_system_plan.md` — Detailed implementation plan for Phase 1.3 Theme & Design System
+- `lib/core/theme/app_spacing.dart` — Design tokens for layout spacing (multiples of 4dp)
+- `lib/core/theme/app_radius.dart` — Design tokens for corner border radiuses (small, medium, large, max)
+- `lib/core/theme/app_durations.dart` — Design tokens for animation transitions (fast, medium, slow)
+- `lib/core/theme/app_typography.dart` — Outfit (headings) and Inter (body/labels) font styling configurations
+- `lib/core/theme/app_color_scheme.dart` — AppColorScheme theme extension for lock status, semantic states (success, warning, error, info, disabled)
+- `lib/core/theme/app_theme.dart` — ThemeData builders for Light (Notion Milk) and Dark (Obsidian Dark) modes
+- `lib/core/services/theme_service.dart` — Dynamic ThemeService managing active ThemeMode state parameters
+- `lib/features/theme_sandbox/views/theme_sandbox_screen.dart` — Dedicated UI sandbox screen for verifying the design system
+- `test/core/services/theme_service_test.dart` — Unit tests for ThemeService state transitions
+- `test/core/theme/app_color_scheme_test.dart` — Unit tests for AppColorScheme copyWith and lerp interpolations
+
+### Changed (Phase 1.3 Theme & Design System — 2026-05-30)
+- `lib/app.dart` — Updated to register ThemeService early in App.build and bind light/dark theme parameters to GetMaterialApp
+- `lib/core/bindings/initial_binding.dart` — Removed duplicate ThemeService registration
+- `lib/core/routes/app_routes.dart` and `lib/core/routes/app_pages.dart` — Added route constants and mapping for the ThemeSandboxScreen
+- `docs/12_phase1_implementation_plan.md` and `docs/03_development_roadmap.md` — Updated status tables to mark Checkpoint 1.3 complete
+
 ### Added (Phase 1.2 Core Architecture — 2026-05-30)
 - `docs/14_phase1_2_core_architecture_plan.md` — Detailed implementation plan for Phase 1.2 Core Architecture
 - `lib/core/config/env_config.dart` — Environment configurations abstracting Firebase project details, logging, and analytics settings

@@ -9,3 +9,4 @@ class InitialBinding implements Bindings {
     Get.put<NetworkService>(NetworkService(), permanent: true);
   }
 }
+
