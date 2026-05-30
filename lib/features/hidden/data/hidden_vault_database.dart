@@ -1,9 +1,7 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift_sqflite/drift_sqflite.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart';
 
+import 'package:memovault/core/observability/app_logger.dart';
+import 'package:memovault/core/storage/sqflite_cipher_executor.dart';
 import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
 import 'package:memovault/features/hidden/data/tables/hidden_notes_table.dart';
 
@@ -23,7 +21,9 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch.');
         await m.createAll();
+        AppLogger.info('[HiddenVaultDatabase] Migration completed');
       },
     );
   }
@@ -31,21 +31,17 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
 
 /// Builds the encrypted [QueryExecutor] for the separate [HiddenVaultDatabase].
 QueryExecutor buildHiddenEncryptedExecutor(String dbPath, String encryptionKey) {
-  return SqfliteQueryExecutor.inDatabaseFolder(
+  return SqfliteCipherQueryExecutor.inDatabaseFolder(
     path: dbPath,
+    password: encryptionKey,
     singleInstance: true,
-    creator: (File file) async {
-      await openDatabase(
-        file.path,
-        password: encryptionKey,
-        version: 1,
-        onConfigure: (db) async {
-          // Journal mode set to WAL for concurrency
-          await db.rawQuery('PRAGMA journal_mode=WAL;');
-          // Enforce foreign key constraints
-          await db.execute('PRAGMA foreign_keys=ON;');
-        },
-      );
+    onConfigure: (db) async {
+      // Journal mode set to WAL for concurrency
+      await db.rawQuery('PRAGMA journal_mode=WAL;');
+      AppLogger.info('[HiddenVaultDatabase] WAL enabled');
+      // Enforce foreign key constraints
+      await db.execute('PRAGMA foreign_keys=ON;');
+      AppLogger.info('[HiddenVaultDatabase] Foreign keys enabled');
     },
   );
 }

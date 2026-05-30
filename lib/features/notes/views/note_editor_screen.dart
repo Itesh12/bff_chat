@@ -208,6 +208,17 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     return true; 
   }
 
+  Color _parseCategoryColor(BuildContext context, String? hexString) {
+    if (hexString == null || hexString.length != 6) {
+      return context.colors.disabled;
+    }
+    try {
+      return Color(int.parse('FF$hexString', radix: 16));
+    } catch (_) {
+      return context.colors.disabled;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -228,9 +239,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           Obx(() {
             final activeCategory = _notesController.categories
                 .firstWhereOrNull((c) => c.id == _selectedCategoryId);
-            final color = activeCategory != null
-                ? Color(int.parse('FF${activeCategory.colorHex}', radix: 16))
-                : context.colors.disabled;
+            final color = _parseCategoryColor(context, activeCategory?.colorHex);
 
             return Center(
               child: GestureDetector(

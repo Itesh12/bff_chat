@@ -88,7 +88,7 @@ class HiddenVaultService extends GetxService {
     _notesDao = HiddenNotesDao(_db!);
 
     // Warm up the database to make sure it opens and key is validated
-    await _db!.customStatement('SELECT 1');
+    await _db!.customSelect('SELECT 1').get();
 
     AppLogger.info('[HiddenVaultService] Hidden vault database unlocked and opened.');
     return true;

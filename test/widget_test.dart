@@ -10,8 +10,10 @@ import 'package:memovault/core/storage/app_database.dart';
 import 'package:drift/native.dart';
 
 class FakeSecureStorage extends GetxService implements SecureStorageService {
+  final String _testKey = DatabaseService.generate256BitKey();
+
   @override
-  Future<String?> read(String key) async => 'test-key-32-bytes-long-1234567890';
+  Future<String?> read(String key) async => _testKey;
   @override
   Future<void> write(String key, String value) async {}
   @override
@@ -52,7 +54,7 @@ void main() {
     // In-memory Drift database
     final db = AppDatabase(NativeDatabase.memory());
     final dbService = DatabaseService(dbFactory: (_, __) => db);
-    await dbService.init();
+    await dbService.init(dbName: 'test_widget_app.db');
     Get.put<DatabaseService>(dbService, permanent: true);
 
     await tester.pumpWidget(const App());

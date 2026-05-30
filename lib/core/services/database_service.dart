@@ -105,9 +105,12 @@ class DatabaseService extends GetxService {
     }
 
     _isInitializing = true;
+    final name = dbName ?? _kDatabaseFileName;
+    AppLogger.info('[DatabaseService] Initializing database: $name');
+    final totalStopwatch = Stopwatch()..start();
+
     try {
       final secureStorage = Get.find<SecureStorageService>();
-      final name = dbName ?? _kDatabaseFileName;
 
       // Resolve absolute path inside getApplicationDocumentsDirectory()
       // unless it is an explicit absolute path or test database path.
@@ -129,9 +132,60 @@ class DatabaseService extends GetxService {
         'key_in_storage': storedKeyExists,
       });
 
-      final encryptionKey = await _resolveEncryptionKey(secureStorage);
+      // 1. Secure storage read timing warning
+      final storageStopwatch = Stopwatch()..start();
+      final existingKey = await secureStorage.read(_kDbEncryptionKeyStorageKey);
+      storageStopwatch.stop();
+      final storageReadMs = storageStopwatch.elapsedMilliseconds;
+      if (storageReadMs > 100) {
+        AppLogger.warning(
+          '[DatabaseService] Slow Secure Storage Read',
+          metadata: {'duration_ms': storageReadMs},
+        );
+      }
+
+      final String encryptionKey;
+      if (existingKey != null && existingKey.isNotEmpty) {
+        encryptionKey = existingKey;
+        AppLogger.info('[DatabaseService] Encryption key resolved.');
+      } else {
+        // 2. Key generation timing warning
+        final keyGenStopwatch = Stopwatch()..start();
+        encryptionKey = generate256BitKey();
+        await secureStorage.write(_kDbEncryptionKeyStorageKey, encryptionKey);
+        keyGenStopwatch.stop();
+        final keyGenMs = keyGenStopwatch.elapsedMilliseconds;
+        if (keyGenMs > 50) {
+          AppLogger.warning(
+            '[DatabaseService] Slow Key Generation',
+            metadata: {'duration_ms': keyGenMs},
+          );
+        }
+        AppLogger.info('[DatabaseService] New 256-bit encryption key generated and stored.');
+        _emitAnalyticsEvent('database_key_regenerated');
+      }
+
+      // 3. Database open timing warning
+      final dbOpenStopwatch = Stopwatch()..start();
       _db = await _openDatabase(dbPath, encryptionKey, secureStorage);
-      AppLogger.info('[DatabaseService] Encrypted database opened successfully.');
+      dbOpenStopwatch.stop();
+      final dbOpenMs = dbOpenStopwatch.elapsedMilliseconds;
+      if (dbOpenMs > 300) {
+        AppLogger.warning(
+          '[DatabaseService] Slow database open',
+          metadata: {'duration_ms': dbOpenMs},
+        );
+      }
+
+      totalStopwatch.stop();
+      final totalMs = totalStopwatch.elapsedMilliseconds;
+      if (totalMs > 1500) {
+        AppLogger.warning(
+          '[DatabaseService] Slow total bootstrap time',
+          metadata: {'duration_ms': totalMs},
+        );
+      }
+      AppLogger.info('[DatabaseService] Bootstrap complete.');
       return this;
     } finally {
       _isInitializing = false;
@@ -172,14 +226,50 @@ class DatabaseService extends GetxService {
       }
 
       final db = _dbFactory(dbPath, encryptionKey);
-      // Force-open to trigger key verification before returning.
-      await db.customStatement('SELECT 1');
+      AppLogger.info('[DatabaseService] AppDatabase created.');
+
+      // Force-open to trigger key verification and migrations before returning.
+      AppLogger.info('[DatabaseService] Verification query started...');
+      final migrationStopwatch = Stopwatch()..start();
+      await db.customSelect('SELECT 1').get();
+      migrationStopwatch.stop();
+      
+      final migrationMs = migrationStopwatch.elapsedMilliseconds;
+      if (migrationMs > 500) {
+        AppLogger.warning(
+          '[DatabaseService] Slow database migration/initialization',
+          metadata: {'duration_ms': migrationMs},
+        );
+      }
+      AppLogger.info('[DatabaseService] Verification query succeeded.');
+
+      // RESET RECOVERY COUNTER ON SUCCESSFUL BOOT (delayed timing safeguard)
+      await secureStorage.delete(_kDbRecoveryCountKey);
+      await secureStorage.delete(_kDbRecoveryWindowStartKey);
+      AppLogger.info('[DatabaseService] Recovery counters cleared.');
+
       return db;
     } catch (e) {
+      final classification = _classifyOpenError(e);
+      if (classification == _ErrorClassification.migrationOrGeneric) {
+        AppLogger.fatal(
+          '[DatabaseService] Database open failed due to migration/generic error. NO WIPE performed.',
+          metadata: {
+            'classification': 'migration_or_generic_sql_error',
+            'error': e.toString(),
+          },
+          error: e,
+        );
+        rethrow;
+      }
+
       // ADR-011: Valid DB file but wrong key — check recovery counter first.
       AppLogger.warning(
-        '[DatabaseService] Failed to open DB (bad key or corruption). '
-        'Checking recovery counter before wipe.',
+        '[DatabaseService] Database open failed (corruption/decryption failure). checking recovery counter before wipe.',
+        metadata: {
+          'classification': 'corruption_or_bad_key',
+          'error': e.toString(),
+        },
         error: e,
       );
       _emitAnalyticsEvent('database_open_failed');
@@ -189,7 +279,16 @@ class DatabaseService extends GetxService {
 
       final freshKey = await _resolveEncryptionKey(secureStorage);
       final db = _dbFactory(dbPath, freshKey);
-      await db.customStatement('SELECT 1');
+      
+      AppLogger.info('[DatabaseService] Post-wipe verification query started...');
+      await db.customSelect('SELECT 1').get();
+      AppLogger.info('[DatabaseService] Post-wipe verification query succeeded.');
+
+      // Clear counters after post-wipe successful open
+      await secureStorage.delete(_kDbRecoveryCountKey);
+      await secureStorage.delete(_kDbRecoveryWindowStartKey);
+      AppLogger.info('[DatabaseService] Recovery counters cleared post-wipe.');
+
       return db;
     }
   }
@@ -249,6 +348,35 @@ class DatabaseService extends GetxService {
     );
     _emitAnalyticsEvent('database_recovery_triggered');
     await _wipeDatabase(dbPath, storage);
+  }
+
+  // Error classification helper to prevent wiping on migration failures.
+  _ErrorClassification _classifyOpenError(Object e) {
+    final errStr = e.toString().toLowerCase();
+    
+    // Explicitly check for migration signatures to prevent wipes
+    if (errStr.contains('migration') ||
+        errStr.contains('upgrade') ||
+        errStr.contains('createtable') ||
+        errStr.contains('alter table') ||
+        errStr.contains('no such table') ||
+        errStr.contains('no such column')) {
+      return _ErrorClassification.migrationOrGeneric;
+    }
+
+    // Encryption or corruption signature matches
+    if (errStr.contains('file is not a database') ||
+        errStr.contains('invalid magicheader') ||
+        errStr.contains('corrupt') ||
+        errStr.contains('sqlite_corrupt') ||
+        errStr.contains('sqlite3_key') ||
+        errStr.contains('decryption') ||
+        e is ArgumentError) { // e.g. key length validation failure
+      return _ErrorClassification.corruptionOrBadKey;
+    }
+
+    // Default to migration/generic safety (NO WIPE)
+    return _ErrorClassification.migrationOrGeneric;
   }
 
   /// Deletes the database file (and companion WAL/SHM files) and removes the
@@ -322,3 +450,5 @@ class DatabaseService extends GetxService {
     super.onClose();
   }
 }
+
+enum _ErrorClassification { corruptionOrBadKey, migrationOrGeneric }

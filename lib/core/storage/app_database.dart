@@ -1,9 +1,7 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart';
-import 'package:drift_sqflite/drift_sqflite.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart';
 
+import 'package:memovault/core/observability/app_logger.dart';
+import 'package:memovault/core/storage/sqflite_cipher_executor.dart';
 import 'package:memovault/core/storage/tables/app_metadata_table.dart';
 import 'package:memovault/core/storage/tables/categories_table.dart';
 import 'package:memovault/core/storage/tables/notes_table.dart';
@@ -34,13 +32,17 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
+        AppLogger.info('[AppDatabase] Creating database tables from scratch.');
         await m.createAll();
+        AppLogger.info('[AppDatabase] Migration completed');
       },
       onUpgrade: (Migrator m, int from, int to) async {
+        AppLogger.info('[AppDatabase] Upgrading database from version $from to $to.');
         if (from < 2) {
           await m.createTable(categoriesTable);
           await m.createTable(notesTable);
         }
+        AppLogger.info('[AppDatabase] Migration completed');
       },
     );
   }
@@ -55,21 +57,17 @@ class AppDatabase extends _$AppDatabase {
 /// Foreign-key enforcement is set via [Database.execute] because
 /// `PRAGMA foreign_keys=ON;` returns no rows.
 QueryExecutor buildEncryptedExecutor(String dbPath, String encryptionKey) {
-  return SqfliteQueryExecutor.inDatabaseFolder(
+  return SqfliteCipherQueryExecutor.inDatabaseFolder(
     path: dbPath,
+    password: encryptionKey,
     singleInstance: true,
-    creator: (File file) async {
-      await openDatabase(
-        file.path,
-        password: encryptionKey,
-        version: 1,
-        onConfigure: (db) async {
-          // rawQuery — returns rows (journal mode string), so execute() fails.
-          await db.rawQuery('PRAGMA journal_mode=WAL;');
-          // execute — returns no rows, safe.
-          await db.execute('PRAGMA foreign_keys=ON;');
-        },
-      );
+    onConfigure: (db) async {
+      // rawQuery — returns rows (journal mode string), so execute() fails.
+      await db.rawQuery('PRAGMA journal_mode=WAL;');
+      AppLogger.info('[AppDatabase] WAL enabled');
+      // execute — returns no rows, safe.
+      await db.execute('PRAGMA foreign_keys=ON;');
+      AppLogger.info('[AppDatabase] Foreign keys enabled');
     },
   );
 }
