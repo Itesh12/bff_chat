@@ -1,6 +1,6 @@
 # 12 — Phase 1 Implementation Plan: Core Application Framework
 
-> **Document Status:** 🟡 In Progress — Phase 1.4 Complete  
+> **Document Status:** 🟡 In Progress — Phase 1.5 Planning  
 > **Last Updated:** 2026-05-30  
 > **Phase:** 1 — Core Application Framework  
 > **Owner:** Engineering Team  
@@ -22,7 +22,7 @@ Phase 1 is executed as **6 independent checkpoints**. Each checkpoint:
 | **1.2** | Core Architecture | [14_phase1_2_core_architecture_plan.md](14_phase1_2_core_architecture_plan.md) | ✅ Complete |
 | **1.3** | Theme & Design System | [15_phase1_3_theme_design_system_plan.md](15_phase1_3_theme_design_system_plan.md) | ✅ Complete |
 | **1.4** | Storage Layer | [16_phase1_4_storage_layer_plan.md](16_phase1_4_storage_layer_plan.md) | ✅ Complete |
-| 1.5 | Observability Layer | TBD after 1.4 approval | ⬜ Pending |
+| 1.5 | Observability Layer | [17_phase1_5_observability_layer_plan.md](17_phase1_5_observability_layer_plan.md) | 🟡 Planning |
 | 1.6 | Framework Validation | TBD after 1.5 approval | ⬜ Pending |
 
 > ⚠️ No checkpoint plan is created until the preceding checkpoint is approved. This document serves as the Phase 1 overview only.
@@ -49,7 +49,7 @@ No visible feature screens are built in this phase. The output is a runnable app
 - Global error handling and crash reporting (Crashlytics)
 - Structured logging framework
 - Network connectivity monitoring
-- Isar database initialization and schema v1
+- Drift + SQLCipher database initialization and schema v1
 - Flutter Secure Storage initialization
 - SharedPreferences wrapper
 - Root/jailbreak detection hook (passive — does not block yet)

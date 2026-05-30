@@ -48,9 +48,9 @@ Each phase has a clearly defined goal, deliverables, and exit criteria. **No pha
 
 ## Phase 1 — Core Application Framework
 
-**Goal:** Build the technical skeleton — routing, DI, themes, logging, error handling, environment config.
+**Goal:** Build the technical skeleton — routing, DI, themes, logging, error handling, environment config, secure storage.
 
-**Status:** ❌ REOPENED — Phase 1.4 Storage Layer (Chosen storage engine does not satisfy the project's encryption requirements)
+**Status:** 🟡 Active — Phase 1.5 Observability Layer (Phase 1.4 Storage Layer Drift + SQLCipher redesign is complete and verified)
 
 ### Deliverables
 
@@ -65,15 +65,15 @@ Each phase has a clearly defined goal, deliverables, and exit criteria. **No pha
 | Logging framework | Structured logging with levels (debug/info/warn/error) |
 | Crash handling | Crashlytics integration, global error zone |
 | Network monitoring | Connectivity monitoring, offline state detection |
-| Local storage | Isar setup, database schema v1, migration strategy |
+| Local storage | Drift + SQLCipher setup, database schema v1, migration strategy |
 | Secure storage | Flutter Secure Storage for tokens and keys |
 
 ### Exit Criteria
-- [ ] App runs on both iOS and Android simulators in all 3 flavors
-- [ ] Navigation system operational with guarded routes
-- [ ] Theme switching functional
+- [x] App runs on both iOS and Android simulators in all 3 flavors
+- [x] Navigation system operational with guarded routes
+- [x] Theme switching functional
 - [ ] Logging and crash reporting verified
-- [ ] All dependencies pinned and documented
+- [x] All dependencies pinned and documented
 
 ---
 

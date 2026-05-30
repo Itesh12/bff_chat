@@ -9,23 +9,23 @@
 ## [Unreleased]
 
 ### Added (Phase 1.4 Storage Layer — 2026-05-30)
-- `docs/16_phase1_4_storage_layer_plan.md` — Detailed implementation plan for Phase 1.4 Storage Layer
+- `docs/16_phase1_4_storage_layer_plan.md` — Detailed implementation plan for Phase 1.4 Storage Layer (Revised)
 - `lib/core/services/preferences_service.dart` — PreferencesService abstract interface
 - `lib/core/services/preferences_service_impl.dart` — Implementation of PreferencesService using SharedPreferencesAsync
 - `lib/core/services/secure_storage_service.dart` — SecureStorageService abstract interface
 - `lib/core/services/secure_storage_service_impl.dart` — Implementation of SecureStorageService using FlutterSecureStorage
-- `lib/core/services/isar_service.dart` — IsarService managing database initialization, verification, and ADR-011 recovery flows
-- `lib/data/models/system_metadata.dart` — Isar collection for storing system-wide config key-values (e.g. key_verification)
+- `lib/core/services/database_service.dart` — DatabaseService managing database initialization, key length validation, and ADR-011 recovery flows
+- `lib/core/storage/app_database.dart` — Drift database instance with custom WAL and Foreign Key SQL configuration
+- `lib/core/storage/tables/app_metadata_table.dart` — Drift table schema for system-wide configuration
 - `lib/domain/repositories/local_repository.dart` — Illustrative example repository interface
 - `test/core/storage/preferences_service_test.dart` — Unit tests for PreferencesServiceImpl
 - `test/core/storage/secure_storage_service_test.dart` — Unit tests for SecureStorageServiceImpl
-- `test/core/storage/isar_service_test.dart` — Unit tests for IsarService and ADR-011 recovery wipe flows
-- `isar.dll` — Pinned DLL library for running Isar database in local desktop unit tests
+- `test/core/storage/database_service_test.dart` — Unit tests for DatabaseService, singleton protection, key validation, and ADR-011 recovery wipe flows
 
 ### Changed (Phase 1.4 Storage Layer — 2026-05-30)
-- `docs/04_architecture_decisions.md` — Appended ADR-011 Local Database Encryption Recovery Policy
-- `pubspec.yaml` — Added `isar`, `isar_flutter_libs`, `flutter_secure_storage`, `shared_preferences`, and `path_provider` dependencies, and `shared_preferences_platform_interface` as dev dependency
-- `lib/main_dev.dart`, `lib/main_staging.dart`, `lib/main_prod.dart` — Updated startup sequence to bootstrap and register PreferencesService, SecureStorageService, and IsarService
+- `docs/04_architecture_decisions.md` — Appended ADR-011 Encryption Recovery and ADR-012 Database Technology Selection Policies
+- `pubspec.yaml` — Added `drift`, `sqflite_sqlcipher`, `drift_sqflite`, `sqlite3`, `flutter_secure_storage`, and `shared_preferences` dependencies, and `drift_dev` as a dev dependency
+- `lib/main_dev.dart`, `lib/main_staging.dart`, `lib/main_prod.dart` — Updated startup sequence to bootstrap and register PreferencesService, SecureStorageService, and DatabaseService
 - `lib/core/bindings/initial_binding.dart` — Registered storage singletons permanently
 - `docs/12_phase1_implementation_plan.md` and `docs/03_development_roadmap.md` — Updated status tables to mark Checkpoint 1.4 complete
 
