@@ -12,7 +12,7 @@ import 'package:drift/drift.dart';
 class AppMetadata extends Table {
   TextColumn get configKey => text()();
   TextColumn get configValue => text()();
-  IntColumn get updatedAt => integer().withDefault(Constant(0))();
+  IntColumn get updatedAt => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {configKey};

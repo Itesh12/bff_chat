@@ -63,7 +63,7 @@ class DatabaseService extends GetxService {
     final secureStorage = Get.find<SecureStorageService>();
     final dbPath = dbName ?? _kDatabaseFileName;
 
-    String encryptionKey = await _resolveEncryptionKey(secureStorage);
+    final encryptionKey = await _resolveEncryptionKey(secureStorage);
     _db = await _openDatabase(dbPath, encryptionKey, secureStorage);
     debugPrint('[DatabaseService] Encrypted database opened. path=$dbPath');
     return this;

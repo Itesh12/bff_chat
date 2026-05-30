@@ -4,7 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_sqflite/drift_sqflite.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 
-import 'tables/app_metadata_table.dart';
+import 'package:memovault/core/storage/tables/app_metadata_table.dart';
 
 part 'app_database.g.dart';
 
@@ -45,8 +45,8 @@ QueryExecutor buildEncryptedExecutor(String dbPath, String encryptionKey) {
   return SqfliteQueryExecutor.inDatabaseFolder(
     path: dbPath,
     singleInstance: true,
-    creator: (File file) {
-      return openDatabase(
+    creator: (File file) async {
+      await openDatabase(
         file.path,
         password: encryptionKey,
         version: 1,

@@ -28,7 +28,7 @@ class _InMemoryExecutor implements QueryExecutor {
   Future<bool> ensureOpen(QueryExecutorUser user) async {
     if (!_open) {
       _open = true;
-      await user.beforeOpen(this, OpeningDetails(null, 1));
+      await user.beforeOpen(this, const OpeningDetails(null, 1));
     }
     return true;
   }
@@ -129,6 +129,12 @@ class _WrongKeySimulatorFactory {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  // Each test creates its own AppDatabase with an independent in-memory executor.
+  // Drift's multiple-instances check is safe to suppress here because no two
+  // instances share a QueryExecutor in these tests.
+  setUpAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = true);
+  tearDownAll(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = false);
 
   late FakeFlutterSecureStorage fakeStorage;
   late SecureStorageService secureStorage;
