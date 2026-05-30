@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:memovault/core/observability/app_logger.dart';
+import 'package:memovault/core/services/analytics_service.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/core/storage/app_database.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
@@ -61,7 +63,7 @@ class DatabaseService extends GetxService {
   /// Initializes (or recovers) the encrypted database.
   Future<DatabaseService> init({String? dbName}) async {
     if (_db != null) {
-      debugPrint('[DatabaseService] Database already initialized. Skipping.');
+      AppLogger.debug('[DatabaseService] Database already initialized. Skipping.');
       return this;
     }
 
@@ -80,7 +82,7 @@ class DatabaseService extends GetxService {
 
     final encryptionKey = await _resolveEncryptionKey(secureStorage);
     _db = await _openDatabase(dbPath, encryptionKey, secureStorage);
-    debugPrint('[DatabaseService] Encrypted database opened. path=$dbPath');
+    AppLogger.info('[DatabaseService] Encrypted database opened.');
     return this;
   }
 
@@ -96,7 +98,8 @@ class DatabaseService extends GetxService {
     }
     final newKey = generate256BitKey();
     await storage.write(_kDbEncryptionKeyStorageKey, newKey);
-    debugPrint('[DatabaseService] New 256-bit encryption key generated and stored.');
+    AppLogger.info('[DatabaseService] New 256-bit encryption key generated and stored.');
+    _emitAnalyticsEvent('database_key_regenerated');
     return newKey;
   }
 
@@ -120,9 +123,13 @@ class DatabaseService extends GetxService {
       return db;
     } catch (e) {
       // ADR-011: Valid DB file but wrong key — wipe and reinitialize.
-      debugPrint('[DatabaseService] ⚠️ Failed to open DB (bad key or corruption). '
-          'Wiping and reinitializing. error=$e');
+      AppLogger.warning(
+        '[DatabaseService] Failed to open DB (bad key or corruption). Wiping and reinitializing.',
+        error: e,
+      );
+      _emitAnalyticsEvent('database_open_failed');
       await _wipeDatabase(dbPath, secureStorage);
+      _emitAnalyticsEvent('database_recovery_triggered');
       final freshKey = await _resolveEncryptionKey(secureStorage);
       final db = _dbFactory(dbPath, freshKey);
       await db.customStatement('SELECT 1');
@@ -142,7 +149,7 @@ class DatabaseService extends GetxService {
     } catch (_) {
       // If deletion fails, the next open attempt will regenerate anyway.
     }
-    debugPrint('[DatabaseService] Database wiped. A fresh DB will be created.');
+    AppLogger.info('[DatabaseService] Database wiped. A fresh DB will be created.');
   }
 
   /// Generates a cryptographically secure random 256-bit (32-byte) key,
@@ -153,12 +160,25 @@ class DatabaseService extends GetxService {
     return base64UrlEncode(keyBytes);
   }
 
+  /// Emits a non-sensitive database telemetry event when AnalyticsService is
+  /// registered. Silently skips if analytics are unavailable (e.g. in tests).
+  void _emitAnalyticsEvent(String name) {
+    try {
+      final analytics = Get.find<AnalyticsService>();
+      if (analytics.isEnabled) {
+        analytics.logEvent(name: name);
+      }
+    } catch (_) {
+      // AnalyticsService not yet registered — skip silently.
+    }
+  }
+
   /// Closes the database connection and resets internal references.
   Future<void> close() async {
     if (_db != null) {
       await _db!.close();
       _db = null;
-      debugPrint('[DatabaseService] Database connection closed.');
+      AppLogger.info('[DatabaseService] Database connection closed.');
     }
   }
 

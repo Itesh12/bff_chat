@@ -413,3 +413,59 @@ Selected:
 - **Complex Queries**: Fully supports relational data, indexing, and complex queries essential for messaging workloads.
 - **Reactive Streams**: Drift seamlessly supports reactive database streams.
 - **Future Proof**: Solves long-term compatibility requirements (AGP 9+), future messaging, offline synchronization, and secure media metadata handling.
+
+---
+
+## ADR-013 — Logging & Telemetry Policy
+
+**Status:** Accepted
+
+**Context:**
+MemoVault is a security-first note and communication vault app. Telemetry and diagnostics are crucial to catch production bugs, track startup latency, and monitor synchronization states, but any logging that leaks user data (decrypted notes, keys, chat messages, or credentials) completely breaks our security guarantees. We need a clear logging, retention, and telemetry policy that is enforced automatically.
+
+**Decision:**
+
+1. **Strict Data Redaction:**
+   - The logging framework will run an automated redaction engine.
+   - Any string matching Base64 patterns (like encryption keys), passwords, vault metadata paths, raw emails, or tokens will be replaced with `[REDACTED]`.
+   - Logging note bodies, vault structures, or chat text is strictly forbidden.
+
+2. **Logger Usage Rules:**
+   - **FORBIDDEN:**
+     ```dart
+     logger.info(noteContent);
+     logger.info(messageText);
+     logger.info(encryptionKey);
+     logger.info(password);
+     ```
+   - **ALLOWED:**
+     ```dart
+     logger.info('Note created', metadata: {'noteId': id});
+     logger.warning('Failed to sync batch', error: err);
+     ```
+
+3. **Telemetry Opt-Out:**
+   - Introduce an `AnalyticsService` contract with a boolean getter `bool get isEnabled;`.
+   - Setup a `NoOpAnalyticsService` alongside the real `FirebaseAnalyticsService`.
+   - Telemetry must be completely disabled in development/unit tests (running the No-Op adapter) or when the user opt-out flag is set in preferences.
+
+4. **Event Naming Convention:**
+   - All custom events must use `snake_case` (e.g. `note_created`, `note_updated`, `vault_opened`, `hidden_access_triggered`, `message_sent`). No PascalCase or camelCase is allowed.
+
+5. **Log Retention Limits:**
+   - **Development:** Print to console only; no persistent local log files are kept.
+   - **Staging / QA:** Reports errors/warnings to Crashlytics. Logs are retained for a maximum of 30 days.
+   - **Production:** No local database persistent log files. No raw user parameters are transmitted. Non-fatal telemetry is strictly metadata-bound.
+
+6. **Database Recovery Telemetry:**
+   - When recovery flows (ADR-011) are triggered, the app will log:
+     - `database_recovery_triggered`
+     - `database_key_regenerated`
+     - `database_open_failed`
+   - These events are logged with non-sensitive metadata (e.g., attempt number, error signature) but NEVER raw keys or paths.
+
+**Rationale:**
+- Automating key redaction and establishing a clean abstraction block prevents developers from leaking keys/contents accidentally.
+- Giving the user control over telemetry satisfies modern privacy standards (GDPR, CCPA).
+- Standardizing logging rules from day one prevents technical debt.
+
