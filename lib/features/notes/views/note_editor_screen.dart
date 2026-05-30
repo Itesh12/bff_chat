@@ -69,7 +69,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   void _triggerAutoSave() {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+    _debounceTimer = Timer(AppDurations.slow, () {
       _saveNote();
     });
   }
@@ -211,10 +211,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    final toolbarBg = isDark ? Colors.grey[950]! : Colors.grey[50]!;
-    final toolbarBorder = isDark ? Colors.grey[900]! : Colors.grey[200]!;
+    final toolbarBg = theme.scaffoldBackgroundColor;
+    final toolbarBorder = theme.dividerColor;
 
     return PopScope(
       canPop: true,
@@ -231,7 +230,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 .firstWhereOrNull((c) => c.id == _selectedCategoryId);
             final color = activeCategory != null
                 ? Color(int.parse('FF${activeCategory.colorHex}', radix: 16))
-                : Colors.grey;
+                : context.colors.disabled;
 
             return Center(
               child: GestureDetector(

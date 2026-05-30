@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:memovault/domain/notes/note_entity.dart';
 import 'package:memovault/domain/notes/note_sort_mode.dart';
 import 'package:memovault/domain/notes/notes_repository.dart';
 import 'package:memovault/features/notes/controllers/notes_search_controller.dart';
+import 'package:memovault/features/hidden/services/activation_trigger_service.dart';
 
 class FakeNotesRepository implements NotesRepository {
   final List<NoteEntity> _notes = [];
@@ -57,6 +59,7 @@ void main() {
     late NotesSearchController controller;
 
     setUp(() {
+      Get.put<ActivationTriggerService>(ActivationTriggerService());
       repository = FakeNotesRepository();
       controller = NotesSearchController(repository);
       
@@ -81,6 +84,10 @@ void main() {
         createdAt: now,
         updatedAt: now,
       ));
+    });
+
+    tearDown(() {
+      Get.delete<ActivationTriggerService>();
     });
 
     test('should not fire search if query is less than 2 characters', () async {

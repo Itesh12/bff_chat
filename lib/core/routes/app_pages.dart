@@ -11,6 +11,11 @@ import 'package:memovault/features/notes/views/notes_search_screen.dart';
 import 'package:memovault/features/notes/views/notes_archive_screen.dart';
 import 'package:memovault/features/notes/views/categories_screen.dart';
 
+import 'package:memovault/features/hidden/bindings/hidden_binding.dart';
+import 'package:memovault/features/hidden/middleware/hidden_session_guard_middleware.dart';
+import 'package:memovault/features/hidden/views/hidden_pin_screen.dart';
+import 'package:memovault/features/hidden/views/hidden_home_screen.dart';
+
 abstract final class AppPages {
   static final List<GetPage<dynamic>> pages = [
     GetPage(
@@ -50,6 +55,17 @@ abstract final class AppPages {
       name: AppRoutes.categories,
       page: () => const CategoriesScreen(),
       binding: NotesBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.hiddenPin,
+      page: () => const HiddenPinScreen(),
+      binding: HiddenBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.hiddenHome,
+      page: () => const HiddenHomeScreen(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
     ),
   ];
 }

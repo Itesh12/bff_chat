@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/core/observability/app_logger.dart';
+import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/domain/notes/note_entity.dart';
 import 'package:memovault/domain/notes/notes_repository.dart';
+import 'package:memovault/core/theme/app_durations.dart';
+import 'package:memovault/features/hidden/services/activation_trigger_service.dart';
 
 class NotesSearchController extends GetxController {
   final NotesRepository _repository;
@@ -31,7 +34,7 @@ class NotesSearchController extends GetxController {
           results.clear();
         }
       },
-      time: const Duration(milliseconds: 300),
+      time: AppDurations.debounce,
     );
   }
 
@@ -46,6 +49,19 @@ class NotesSearchController extends GetxController {
   }
 
   void submitQuery(String value) {
+    final activationTrigger = Get.find<ActivationTriggerService>();
+    if (activationTrigger.isActivationTrigger(value)) {
+      // SECURITY: Clear all search state before routing.
+      // The trigger string MUST NOT reach AppLogger, AnalyticsService,
+      // or any observable that persists beyond this frame.
+      query.value = '';
+      results.clear();
+      isSearching.value = false;
+      // Route — no log call before or after
+      Get.toNamed(AppRoutes.hiddenPin);
+      return;
+    }
+
     query.value = value;
     onQuerySubmitted?.call(); // Triggers Phase 3 stealth checks
     if (value.trim().length >= 2) {

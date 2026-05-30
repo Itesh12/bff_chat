@@ -89,16 +89,16 @@ class _NotesArchiveScreenState extends State<NotesArchiveScreen> {
                     return Dismissible(
                       key: ValueKey(note.id),
                       background: Container(
-                        color: Colors.green.withValues(alpha: 0.8),
+                        color: context.colors.success.withValues(alpha: 0.8),
                         alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: const Icon(Icons.unarchive, color: Colors.white),
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24),
+                        child: Icon(Icons.unarchive, color: theme.colorScheme.onPrimary),
                       ),
                       secondaryBackground: Container(
-                        color: Colors.red.withValues(alpha: 0.8),
+                        color: context.colors.error.withValues(alpha: 0.8),
                         alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: const Icon(Icons.delete_forever, color: Colors.white),
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24),
+                        child: Icon(Icons.delete_forever, color: theme.colorScheme.onError),
                       ),
                       confirmDismiss: (direction) async {
                         if (direction == DismissDirection.startToEnd) {

@@ -42,21 +42,21 @@ class NoteCard extends StatelessWidget {
     }
   }
 
-  Color _parseCategoryColor(String? hexString) {
+  Color _parseCategoryColor(BuildContext context, String? hexString) {
     if (hexString == null || hexString.length != 6) {
-      return Colors.grey.withValues(alpha: 0.3);
+      return context.colors.disabled.withValues(alpha: 0.3);
     }
     try {
       return Color(int.parse('FF$hexString', radix: 16));
     } catch (_) {
-      return Colors.grey.withValues(alpha: 0.3);
+      return context.colors.disabled.withValues(alpha: 0.3);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final categoryColor = _parseCategoryColor(category?.colorHex);
+    final categoryColor = _parseCategoryColor(context, category?.colorHex);
 
     final titleWidget = Text(
       note.title.isEmpty ? 'Untitled' : note.title,
@@ -119,15 +119,11 @@ class NoteCard extends StatelessWidget {
               children: [
                 Expanded(child: titleWidget),
                 const AppGap.h8(),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                AppIconButton.primary(
+                  icon: note.isFavorite ? Icons.star : Icons.star_border,
                   onPressed: onFavoriteTap,
-                  icon: Icon(
-                    note.isFavorite ? Icons.star : Icons.star_border,
-                    size: 20,
-                    color: note.isFavorite ? Colors.amber : theme.iconTheme.color?.withValues(alpha: 0.4),
-                  ),
+                  size: 20,
+                  color: note.isFavorite ? context.colors.warning : theme.iconTheme.color?.withValues(alpha: 0.4),
                 ),
               ],
             ),

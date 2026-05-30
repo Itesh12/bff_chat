@@ -688,3 +688,39 @@ git grep -n "CircularProgressIndicator(" lib/features/ && exit 1 || true
 - Pull request reviewers can mechanically verify compliance without deep reading.
 - The design system becomes the *only* path from `flutter/material.dart` into feature screens.
 - Enables a future migration path: swapping Material for a custom rendering backend would only require changes inside `lib/core/design_system/`, not across every feature.
+
+---
+
+## ADR-017 — Hidden Vault Isolation and Reserved Table Names
+
+**Status:** Accepted
+
+**Date:** 2026-05-30
+
+**Context:**
+The MemoVault application requires a covert hidden vault feature that contains extremely sensitive user data, including secret notes, hidden messages, private contacts, and secure media attachments. To maintain maximum security and prevent accidental exposure or side-channel leakage, we must establish a clear architecture for isolation between the public note repository and the hidden vault repository. Additionally, we must reserve and define table names for future expansion of the hidden vault (e.g., hidden messaging, encrypted media, secure contacts).
+
+**Decision:**
+1. **Strict Logical & Physical Isolation (ADR-017 Compliance)**:
+   - **No Dependency Bridge**: Files in the public notes feature (`lib/features/notes/`) are strictly forbidden from importing, referencing, or calling any code under the hidden feature package (`lib/features/hidden/`). The public notes feature must operate completely unaware of the hidden vault's existence.
+   - **Separate Database Files**: Public notes are stored in `app.db` using the standard database connection. Hidden notes and secret data are stored in a physically distinct database file, `hidden_vault.db`, using SQLCipher encryption.
+   - **Distinct Cryptographic Keys**: The database key for `hidden_vault.db` is stretched using SHA-256 (10,000 rounds) from the user's secret vault PIN, completely independent of the main database key.
+   - **Memory-Only Session State**: Unlocking the hidden database occurs only after the vault PIN is entered successfully. The open database connection is held exclusively in memory by `HiddenVaultDatabase` and is closed immediately when the hidden session is locked.
+   - **Wipe and Destroy (Panic Mode)**: When a panic wipe is triggered, all database and journal/WAL files matching `hidden_vault.db*` are deleted from the disk, and all secure storage key/config entries are deleted.
+
+2. **Reserved Table Names inside `hidden_vault.db`**:
+   To ensure smooth future database migrations and prevent naming collisions, we reserve the following table names in the `hidden_vault.db` SQLite schema:
+   
+   | Table Name | Purpose | Implementation Phase |
+   |---|---|---|
+   | `hidden_notes` | Stores encrypted secret notes markdown content and category associations | Phase 3 (Implemented) |
+   | `hidden_media` | Stores encrypted binary data metadata for secret photos, audio, and video | Phase 6 (Reserved) |
+   | `hidden_attachments` | Stores metadata and decryption parameters for secure note attachments | Phase 6 (Reserved) |
+   | `hidden_messages` | Stores encrypted chat messages for stealth peer-to-peer messaging | Phase 5 (Reserved) |
+   | `hidden_contacts` | Stores cryptographic identities, aliases, and public keys for secure contacts | Phase 5 (Reserved) |
+
+**Consequences:**
+- Prevents structural leakage: Public code cannot leak details of the hidden vault because the dependency graph has no path from public notes to hidden features.
+- Multi-layered security: A compromised public database (`app.db`) exposes zero hidden vault data, as they are encrypted under completely separate keys.
+- Structured schema design: Reserving tables for messaging, media, attachments, and contacts guarantees that future phases can implement these features on top of a single database schema without migrations or schema collisions.
+

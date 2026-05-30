@@ -6,14 +6,14 @@ import 'package:memovault/features/notes/controllers/notes_controller.dart';
 class NoteDetailScreen extends GetView<NotesController> {
   const NoteDetailScreen({super.key});
 
-  Color _parseCategoryColor(String? hexString) {
+  Color _parseCategoryColor(BuildContext context, String? hexString) {
     if (hexString == null || hexString.length != 6) {
-      return Colors.grey;
+      return context.colors.disabled;
     }
     try {
       return Color(int.parse('FF$hexString', radix: 16));
     } catch (_) {
-      return Colors.grey;
+      return context.colors.disabled;
     }
   }
 
@@ -30,9 +30,8 @@ class NoteDetailScreen extends GetView<NotesController> {
   Widget build(BuildContext context) {
     final id = Get.parameters['id'];
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    final borderThemeColor = isDark ? Colors.grey[850]! : Colors.grey[200]!;
+    final borderThemeColor = theme.dividerColor;
 
     return Obx(() {
       final note = controller.notes.firstWhereOrNull((n) => n.id == id);
@@ -44,7 +43,7 @@ class NoteDetailScreen extends GetView<NotesController> {
       }
 
       final category = controller.categories.firstWhereOrNull((c) => c.id == note.categoryId);
-      final categoryColor = _parseCategoryColor(category?.colorHex);
+      final categoryColor = _parseCategoryColor(context, category?.colorHex);
 
       return AppScaffold(
         title: 'View Note',

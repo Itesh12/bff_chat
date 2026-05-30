@@ -23,11 +23,11 @@ class CategoriesScreen extends GetView<NotesController> {
     {'name': 'Midnight Teal', 'hex': '006064'},
   ];
 
-  Color _parseCategoryColor(String hexString) {
+  Color _parseCategoryColor(BuildContext context, String hexString) {
     try {
       return Color(int.parse('FF$hexString', radix: 16));
     } catch (_) {
-      return Colors.grey;
+      return context.colors.disabled;
     }
   }
 
@@ -42,6 +42,7 @@ class CategoriesScreen extends GetView<NotesController> {
       title: isEdit ? 'Edit Category' : 'Create Category',
       child: StatefulBuilder(
         builder: (context, setLocalState) {
+          final theme = Theme.of(context);
           return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -69,7 +70,7 @@ class CategoriesScreen extends GetView<NotesController> {
                   itemBuilder: (context, index) {
                     final preset = _presets[index];
                     final hex = preset['hex']!;
-                    final color = _parseCategoryColor(hex);
+                    final color = _parseCategoryColor(context, hex);
                     final isSelected = selectedHex == hex;
 
                     return GestureDetector(
@@ -89,7 +90,7 @@ class CategoriesScreen extends GetView<NotesController> {
                           boxShadow: [
                             if (isSelected)
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
+                                color: theme.shadowColor.withValues(alpha: 0.3),
                                 blurRadius: 4,
                                 spreadRadius: 1,
                               ),
@@ -187,7 +188,7 @@ class CategoriesScreen extends GetView<NotesController> {
           itemCount: list.length,
           itemBuilder: (context, index) {
             final cat = list[index];
-            final color = _parseCategoryColor(cat.colorHex);
+            final color = _parseCategoryColor(context, cat.colorHex);
             final noteCount = controller.notes.where((n) => n.categoryId == cat.id).length;
 
             return AppCard(

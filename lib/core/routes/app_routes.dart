@@ -8,4 +8,6 @@ abstract final class AppRoutes {
   static const String notesSearch = '/notes/search';
   static const String notesArchive = '/notes/archive';
   static const String categories = '/notes/categories';
+  static const String hiddenPin = '/hidden/pin';
+  static const String hiddenHome = '/hidden/home';
 }

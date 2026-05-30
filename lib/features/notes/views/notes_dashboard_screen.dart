@@ -147,7 +147,7 @@ class NotesDashboardScreen extends GetView<NotesController> {
                           onTap: () => controller.setSelectedCategory(null),
                           child: AppChip(
                             label: 'All Notes',
-                            color: isSelected ? theme.primaryColor : Colors.grey,
+                            color: isSelected ? theme.primaryColor : context.colors.disabled,
                           ),
                         ),
                       ),

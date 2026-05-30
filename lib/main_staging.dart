@@ -24,10 +24,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   EnvConfig.initialize(Environment.staging);
 
-  // --- Firebase initialization (must come before observability outputs) ---
+  // --- Firebase initialization (must come before observability outputs for Crashlytics) ---
+  PerformanceTracker.start('startup_firebase');
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  final firebaseMs = PerformanceTracker.finish('startup_firebase')?.inMilliseconds ?? 0;
 
   // --- Observability bootstrap ---
   // Staging: console + Crashlytics (warning+, ≤30 days, per ADR-013).
@@ -51,23 +53,42 @@ Future<void> main() async {
     return true;
   };
 
-  PerformanceTracker.start('startup');
+  // ── Bootstrap sequence with per-phase timing ───────────────────────────────
+  PerformanceTracker.start('startup_total');
 
-  // --- Bootstrap sequence (order is mandatory) ---
+  AppLogger.info('startup_firebase_ms', metadata: {'ms': firebaseMs});
+
   // 1. Secure storage (provides encryption key to DatabaseService)
+  PerformanceTracker.start('startup_secure_storage');
   Get.put<SecureStorageService>(SecureStorageServiceImpl(), permanent: true);
+  AppLogger.info('startup_secure_storage_ms', metadata: {
+    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ?? 0,
+  });
+
   // 2. Preferences
+  PerformanceTracker.start('startup_preferences');
   Get.put<PreferencesService>(PreferencesServiceImpl(), permanent: true);
+  AppLogger.info('startup_preferences_ms', metadata: {
+    'ms': PerformanceTracker.finish('startup_preferences')?.inMilliseconds ?? 0,
+  });
+
   // 3. Database (needs SecureStorageService; must complete before runApp)
+  PerformanceTracker.start('startup_database');
   await Get.putAsync<DatabaseService>(
     () => DatabaseService().init(),
     permanent: true,
   );
+  AppLogger.info('startup_database_ms', metadata: {
+    'ms': PerformanceTracker.finish('startup_database')?.inMilliseconds ?? 0,
+  });
+
   // 4. Theme
   Get.put<ThemeService>(ThemeService(), permanent: true);
 
-  final startupMs = PerformanceTracker.finish('startup')?.inMilliseconds;
-  AppLogger.info('App bootstrap complete', metadata: {'startup_ms': startupMs ?? 0});
+  final totalMs = PerformanceTracker.finish('startup_total')?.inMilliseconds ?? 0;
+  AppLogger.info('App bootstrap complete', metadata: {
+    'startup_total_ms': totalMs,
+  });
 
   runApp(const App());
 }

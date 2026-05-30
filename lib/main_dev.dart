@@ -1,5 +1,5 @@
 import 'dart:ui';
-import 'package:firebase_core/firebase_core.dart';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/app.dart';
@@ -15,23 +15,22 @@ import 'package:memovault/core/services/preferences_service_impl.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/core/services/secure_storage_service_impl.dart';
 import 'package:memovault/core/services/theme_service.dart';
-import 'package:memovault/firebase_options_dev.dart';
 
 /// Development flavor entry point.
-/// Firebase project: flutterpay-83bad  |  App: com.memovault.dev
+///
+/// Key differences from staging/prod:
+///   - Firebase initialization is SKIPPED entirely (ADR-013: dev flavor
+///     uses NoOp analytics; eliminates DNS errors and startup network calls).
+///   - Console-only logging — no Crashlytics.
+///   - Per-phase startup timing logged to console for performance analysis.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   EnvConfig.initialize(Environment.dev);
 
-  // --- Firebase initialization (must come before observability outputs) ---
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // --- Observability bootstrap ---
-  // Dev: console only — no Crashlytics (ADR-013 retention policy).
+  // Dev: console-only observability — no network telemetry (ADR-013).
   AppLogger.addOutput(ConsoleOutput());
-  // Dev: analytics disabled (NoOp adapter — no real events dispatched).
+
+  // Dev: NoOp analytics — no Firebase events dispatched.
   Get.put<AnalyticsService>(NoOpAnalyticsService(), permanent: true);
 
   // Intercept Flutter framework errors (synchronous widget/layout errors).
@@ -49,23 +48,43 @@ Future<void> main() async {
     return true; // mark handled
   };
 
-  PerformanceTracker.start('startup');
+  // ── Bootstrap sequence with per-phase timing ───────────────────────────────
 
-  // --- Bootstrap sequence (order is mandatory) ---
-  // 1. Secure storage (provides encryption key to DatabaseService)
+  PerformanceTracker.start('startup_total');
+
+  // 1. Secure storage — provides encryption key to DatabaseService.
+  PerformanceTracker.start('startup_secure_storage');
   Get.put<SecureStorageService>(SecureStorageServiceImpl(), permanent: true);
-  // 2. Preferences (lightweight shared prefs, no encryption key dependency)
+  AppLogger.info('startup_secure_storage_ms', metadata: {
+    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ?? 0,
+  });
+
+  // 2. Preferences — lightweight shared prefs, no encryption key dependency.
+  PerformanceTracker.start('startup_preferences');
   Get.put<PreferencesService>(PreferencesServiceImpl(), permanent: true);
-  // 3. Database (needs SecureStorageService; must complete before runApp)
+  AppLogger.info('startup_preferences_ms', metadata: {
+    'ms': PerformanceTracker.finish('startup_preferences')?.inMilliseconds ?? 0,
+  });
+
+  // 3. Database — must complete before runApp (notes load on first frame).
+  PerformanceTracker.start('startup_database');
   await Get.putAsync<DatabaseService>(
     () => DatabaseService().init(),
     permanent: true,
   );
-  // 4. Theme (reads preferences, needs prefs ready)
+  AppLogger.info('startup_database_ms', metadata: {
+    'ms': PerformanceTracker.finish('startup_database')?.inMilliseconds ?? 0,
+  });
+
+  // 4. Theme — reads preferences, needs prefs ready.
   Get.put<ThemeService>(ThemeService(), permanent: true);
 
-  final startupMs = PerformanceTracker.finish('startup')?.inMilliseconds;
-  AppLogger.info('App bootstrap complete', metadata: {'startup_ms': startupMs ?? 0});
+  AppLogger.info('startup_total_ms', metadata: {
+    'ms': PerformanceTracker.finish('startup_total')?.inMilliseconds ?? 0,
+  });
+
+  // NOTE: Firebase.initializeApp() is intentionally omitted in dev flavor.
+  // Use staging flavor to test Firebase-dependent features.
 
   runApp(const App());
 }

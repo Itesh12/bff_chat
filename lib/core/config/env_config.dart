@@ -26,4 +26,9 @@ abstract final class EnvConfig {
 
   static bool get isProduction => environment == Environment.prod;
   static bool get isDevelopment => environment == Environment.dev;
+  static bool get isStaging => environment == Environment.staging;
+
+  /// True only for the dev flavor. Used to conditionally skip Firebase
+  /// initialization (eliminates DNS errors and startup network calls in dev).
+  static bool get isDevFlavor => environment == Environment.dev;
 }

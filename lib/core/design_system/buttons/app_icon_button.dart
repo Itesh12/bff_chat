@@ -13,6 +13,7 @@ class AppIconButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final double? size;
   final String? tooltip;
+  final Color? color;
   final _AppIconButtonVariant _variant;
 
   const AppIconButton.primary({
@@ -21,6 +22,7 @@ class AppIconButton extends StatelessWidget {
     required this.onPressed,
     this.size,
     this.tooltip,
+    this.color,
   }) : _variant = _AppIconButtonVariant.primary;
 
   const AppIconButton.secondary({
@@ -29,6 +31,7 @@ class AppIconButton extends StatelessWidget {
     required this.onPressed,
     this.size,
     this.tooltip,
+    this.color,
   }) : _variant = _AppIconButtonVariant.secondary;
 
   const AppIconButton.danger({
@@ -37,6 +40,7 @@ class AppIconButton extends StatelessWidget {
     required this.onPressed,
     this.size,
     this.tooltip,
+    this.color,
   }) : _variant = _AppIconButtonVariant.danger;
 
   @override
@@ -72,6 +76,10 @@ class AppIconButton extends StatelessWidget {
         color = isEnabled ? colors.error : (isDark ? Colors.grey[750]! : Colors.grey[400]!);
         bgColor = Colors.transparent;
         break;
+    }
+
+    if (this.color != null && isEnabled) {
+      color = this.color!;
     }
 
     final double effectiveSize = size ?? 20.0;
