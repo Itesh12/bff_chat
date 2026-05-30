@@ -574,4 +574,117 @@ As MemoVault expands to support multiple features (Notes, Hidden Access, Vault, 
 - Screens become highly readable compositions of standard semantic layout wrappers.
 - CI/CD enforcer checks will automatically fail if raw primitives or spacing literals are leaked inside feature directories.
 
+---
 
+## ADR-016 — Feature-to-Design-System Dependency Rule
+
+**Status:** Accepted
+
+**Date:** 2026-05-30
+
+**Context:**
+ADR-015 establishes what components must be used. ADR-016 formalises *how* feature-layer code is allowed to reference `flutter/material.dart`. As MemoVault grows (Hidden Access, Vault, Messaging, Media, Settings), there is a natural developer pressure to import `flutter/material.dart` and use raw Material widgets directly inside feature screens — especially when creating new screens under deadline. ADR-015 forbids specific widget names, but does not define a clear, enforceable import policy that distinguishes which symbols from `flutter/material.dart` are acceptable inside `lib/features/`.
+
+**Decision:**
+Formalise a split-import contract for all files under `lib/features/`:
+
+### Permitted Symbols from `flutter/material.dart` in `lib/features/`
+
+The following are non-visual Dart/Flutter types that are acceptable to use directly:
+
+| Symbol | Reason |
+|---|---|
+| `BuildContext` | Framework routing and tree traversal |
+| `Color` | Color value type; resolved via `context.colors` |
+| `IconData` | Icon type; visual rendering delegated to `AppIconButton`/`AppButton` |
+| `ThemeMode` | Preference enum; no visual component |
+| `TextEditingController` | Input controller; not a visual component |
+| `FocusNode` | Focus management; not a visual component |
+| `ScrollController` | Scroll control; not a visual component |
+| `Animation`, `AnimationController` | Animation driver; not a visual widget |
+| `Key`, `GlobalKey` | Widget identity; not visual |
+| `VoidCallback`, `ValueChanged<T>` | Callback types |
+| `Locale` | Internationalisation type |
+| `WidgetsBinding`, `SchedulerBinding` | Lifecycle hooks |
+
+### Forbidden Symbols in `lib/features/` (Visual Components)
+
+The following raw Material visual widgets must **never** appear in `lib/features/**/*.dart`:
+
+```
+ElevatedButton     OutlinedButton      TextButton
+IconButton         FloatingActionButton
+TextField          TextFormField
+SearchBar
+Card               ListTile
+AlertDialog        SimpleDialog        showDialog()
+showModalBottomSheet()
+BottomSheet        BottomNavigationBar
+Scaffold           AppBar              SliverAppBar
+SnackBar           ScaffoldMessenger.of().showSnackBar()
+Chip               FilterChip          ActionChip
+CircularProgressIndicator  LinearProgressIndicator
+Divider            VerticalDivider
+Switch             Checkbox            Radio
+DropdownButton     DropdownButtonFormField
+Tooltip            PopupMenuButton
+```
+
+All of the above must be sourced exclusively from:
+```
+lib/core/design_system/
+```
+via the barrel file:
+```dart
+import 'package:memovault/core/design_system/design_system.dart';
+```
+
+### The One Allowed `flutter/material.dart` Import Rule
+
+A feature file **may** contain:
+```dart
+import 'package:flutter/material.dart';
+```
+
+…only when the symbols it uses from that import are exclusively from the permitted list above. If any forbidden visual symbol is needed, it **must** be replaced with its design-system equivalent, and the raw import replaced with:
+```dart
+import 'package:memovault/core/design_system/design_system.dart';
+```
+
+**Rationale:**
+- ADR-015 lists forbidden widget *names*. ADR-016 formalises the *import contract* so that the boundary is mechanically checkable and unambiguous.
+- A future developer joining the project can know exactly which `flutter/material.dart` symbols are safe inside features without reading every ADR.
+- The split-import rule makes CI grep checks precise: if `ElevatedButton(` appears in `lib/features/`, the build fails.
+
+**Enforcement:**
+
+The following CI grep checks enforce ADR-016 at every pull request:
+
+```bash
+# Forbidden visual widgets — must not appear in lib/features/
+git grep -n "ElevatedButton("      lib/features/ && exit 1 || true
+git grep -n "OutlinedButton("      lib/features/ && exit 1 || true
+git grep -n "TextButton("          lib/features/ && exit 1 || true
+git grep -n "IconButton("          lib/features/ && exit 1 || true
+git grep -n "TextField("           lib/features/ && exit 1 || true
+git grep -n "TextFormField("       lib/features/ && exit 1 || true
+git grep -n "Card("                lib/features/ && exit 1 || true
+git grep -n "AlertDialog("         lib/features/ && exit 1 || true
+git grep -n "showDialog("          lib/features/ && exit 1 || true
+git grep -n "showModalBottomSheet(" lib/features/ && exit 1 || true
+git grep -n "SnackBar("            lib/features/ && exit 1 || true
+git grep -n "Scaffold("            lib/features/ && exit 1 || true
+git grep -n "AppBar("              lib/features/ && exit 1 || true
+git grep -n "CircularProgressIndicator(" lib/features/ && exit 1 || true
+```
+
+**Exemptions:**
+- `lib/core/design_system/` — All raw Material usage is permitted here as internal implementation detail.
+- `lib/core/theme/` — ThemeData, ColorScheme, TextTheme construction is permitted here.
+- Test files under `test/` — Widget test harnesses may use `MaterialApp` wrapper for test scaffolding only.
+
+**Consequences:**
+- Every new feature screen added in Phase 3+ is immediately governed by this rule.
+- Pull request reviewers can mechanically verify compliance without deep reading.
+- The design system becomes the *only* path from `flutter/material.dart` into feature screens.
+- Enables a future migration path: swapping Material for a custom rendering backend would only require changes inside `lib/core/design_system/`, not across every feature.
