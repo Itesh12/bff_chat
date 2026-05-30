@@ -124,18 +124,18 @@ void main() {
       expect(controller.isSetup.value, isFalse);
     });
 
-    test('Append digits up to 8 max', () {
+    test('Append digits up to 4 max', () {
       for (int i = 0; i < 10; i++) {
         controller.appendDigit('1');
       }
-      expect(controller.pinInput.value, '11111111'); // Capped at 8
+      expect(controller.pinInput.value, '1111'); // Capped at 4
 
       // Switch to confirming mode and check confirmInput append
       controller.isConfirmingMode.value = true;
       for (int i = 0; i < 10; i++) {
         controller.appendDigit('2');
       }
-      expect(controller.confirmInput.value, '22222222'); // Capped at 8
+      expect(controller.confirmInput.value, '2222'); // Capped at 4
     });
 
     test('Backspace deletes last character', () {
@@ -165,7 +165,7 @@ void main() {
     test('Submit with short PIN shows error', () async {
       controller.pinInput.value = '12';
       await controller.submit();
-      expect(controller.errorMessage.value, 'PIN must be between 4 and 8 digits');
+      expect(controller.errorMessage.value, 'PIN must be exactly 4 digits');
     });
 
     test('Submit when vault is not setup guides through confirmation and setup', () async {

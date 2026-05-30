@@ -9,17 +9,16 @@ void main() {
       service = ActivationTriggerService();
     });
 
-    test('isActivationTrigger returns true for exact matches of .[0-9]{4,8}', () {
+    test('isActivationTrigger returns true for exact matches of .[0-9]{4}', () {
       expect(service.isActivationTrigger('.1234'), isTrue);
-      expect(service.isActivationTrigger('.12345'), isTrue);
-      expect(service.isActivationTrigger('.12345678'), isTrue);
     });
 
     test('isActivationTrigger returns false for invalid strings', () {
       // Too short
       expect(service.isActivationTrigger('.123'), isFalse);
       // Too long
-      expect(service.isActivationTrigger('.123456789'), isFalse);
+      expect(service.isActivationTrigger('.12345'), isFalse);
+      expect(service.isActivationTrigger('.12345678'), isFalse);
       // Leading/trailing spaces
       expect(service.isActivationTrigger(' .1234'), isFalse);
       expect(service.isActivationTrigger('.1234 '), isFalse);
@@ -32,7 +31,6 @@ void main() {
 
     test('extractPin extracts digits after leading dot when query is valid', () {
       expect(service.extractPin('.1234'), '1234');
-      expect(service.extractPin('.12345678'), '12345678');
     });
 
     test('extractPin returns null when query is invalid', () {

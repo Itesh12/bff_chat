@@ -57,7 +57,7 @@ class AppDatabase extends _$AppDatabase {
 /// Foreign-key enforcement is set via [Database.execute] because
 /// `PRAGMA foreign_keys=ON;` returns no rows.
 QueryExecutor buildEncryptedExecutor(String dbPath, String encryptionKey) {
-  return SqfliteCipherQueryExecutor.inDatabaseFolder(
+  return SqfliteCipherQueryExecutor(
     path: dbPath,
     password: encryptionKey,
     singleInstance: true,

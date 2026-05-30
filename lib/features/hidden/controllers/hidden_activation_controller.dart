@@ -28,11 +28,11 @@ class HiddenActivationController extends GetxController {
   void appendDigit(String digit) {
     errorMessage.value = '';
     if (isConfirmingMode.value) {
-      if (confirmInput.value.length < 8) {
+      if (confirmInput.value.length < 4) {
         confirmInput.value += digit;
       }
     } else {
-      if (pinInput.value.length < 8) {
+      if (pinInput.value.length < 4) {
         pinInput.value += digit;
       }
     }
@@ -60,8 +60,8 @@ class HiddenActivationController extends GetxController {
 
   Future<void> submit() async {
     final pin = pinInput.value;
-    if (pin.length < 4 || pin.length > 8) {
-      errorMessage.value = 'PIN must be between 4 and 8 digits';
+    if (pin.length != 4) {
+      errorMessage.value = 'PIN must be exactly 4 digits';
       return;
     }
 

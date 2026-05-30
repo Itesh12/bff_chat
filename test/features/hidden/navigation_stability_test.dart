@@ -186,8 +186,8 @@ class FakeNetwork extends NetworkService {
 class FakeHiddenVaultService extends HiddenVaultService {
   FakeHiddenVaultService(super.secureStorage, super.pinHashing);
 
-  bool _isSetup = true;
-  bool _isUnlocked = false;
+  bool isSetup = true;
+  bool isUnlocked = false;
 
   @override
   HiddenVaultDatabase? get db => null;
@@ -196,20 +196,20 @@ class FakeHiddenVaultService extends HiddenVaultService {
   HiddenNotesDao? get notesDao => null;
 
   @override
-  bool get isVaultInitialized => _isUnlocked;
+  bool get isVaultInitialized => isUnlocked;
 
   @override
-  Future<bool> isVaultSetup() async => _isSetup;
+  Future<bool> isVaultSetup() async => isSetup;
 
   @override
   Future<void> setupVault(String pin) async {
-    _isSetup = true;
+    isSetup = true;
   }
 
   @override
   Future<bool> unlockVault(String pin) async {
     if (pin == '1234') {
-      _isUnlocked = true;
+      isUnlocked = true;
       return true;
     }
     return false;
@@ -217,13 +217,13 @@ class FakeHiddenVaultService extends HiddenVaultService {
 
   @override
   Future<void> lockVault() async {
-    _isUnlocked = false;
+    isUnlocked = false;
   }
 
   @override
   Future<void> panicWipe() async {
-    _isSetup = false;
-    _isUnlocked = false;
+    isSetup = false;
+    isUnlocked = false;
   }
 }
 
@@ -425,6 +425,85 @@ void main() {
 
       // 2. Hidden controllers are disposed
       expect(Get.isRegistered<HiddenHomeController>(), false);
+    });
+
+    testWidgets(
+        'Create vault -> Set PIN 1234 -> Restart (Simulated) -> Unlock with 1234 -> Verify Hidden Notes Screen opens',
+        (tester) async {
+      // 1. Initial State: Vault is NOT setup
+      fakeVaultService.isSetup = false;
+      fakeVaultService.isUnlocked = false;
+
+      await tester.pumpWidget(
+        GetMaterialApp(
+          initialRoute: AppRoutes.notes,
+          getPages: AppPages.pages,
+          defaultTransition: Transition.noTransition,
+          transitionDuration: Duration.zero,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Go to PIN Setup (starts since vault is not setup)
+      Get.toNamed(AppRoutes.hiddenPin);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(Get.currentRoute, AppRoutes.hiddenPin);
+
+      // Create PIN "1234"
+      final controller = Get.find<HiddenActivationController>();
+      controller.appendDigit('1');
+      controller.appendDigit('2');
+      controller.appendDigit('3');
+      controller.appendDigit('4');
+      await controller.submit(); // Enters confirming mode
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(controller.isConfirmingMode.value, isTrue);
+
+      // Confirm PIN "1234"
+      controller.appendDigit('1');
+      controller.appendDigit('2');
+      controller.appendDigit('3');
+      controller.appendDigit('4');
+      await controller.submit(); // Vault is setup and unlocked
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verification: Setup succeeds and routes to Hidden Home
+      expect(fakeVaultService.isSetup, isTrue);
+      expect(fakeVaultService.isVaultInitialized, isTrue);
+      expect(Get.currentRoute, AppRoutes.hiddenHome);
+
+      // 2. Restart App (Simulated: lock vault, reset controller states, re-register bindings)
+      await fakeVaultService.lockVault();
+      sessionService.lockSession();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Disposed state check
+      expect(Get.isRegistered<HiddenHomeController>(), false);
+      expect(Get.currentRoute, AppRoutes.notes);
+
+      // Go back to hidden pin (now vault is setup, should request PIN to unlock)
+      Get.toNamed(AppRoutes.hiddenPin);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(Get.currentRoute, AppRoutes.hiddenPin);
+
+      final lockController = Get.find<HiddenActivationController>();
+      expect(lockController.isSetup.value, isTrue);
+
+      // Unlock with correct PIN "1234"
+      lockController.appendDigit('1');
+      lockController.appendDigit('2');
+      lockController.appendDigit('3');
+      lockController.appendDigit('4');
+      await lockController.submit();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify that hidden notes screen is now open
+      expect(Get.currentRoute, AppRoutes.hiddenHome);
+      expect(sessionService.isActive, true);
+
+      // Clean up the inactivity timer to avoid leaking it in widget test
+      sessionService.lockSession();
+      await tester.pump(const Duration(milliseconds: 500));
     });
   });
 }

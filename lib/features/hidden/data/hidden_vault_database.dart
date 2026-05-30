@@ -31,7 +31,7 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
 
 /// Builds the encrypted [QueryExecutor] for the separate [HiddenVaultDatabase].
 QueryExecutor buildHiddenEncryptedExecutor(String dbPath, String encryptionKey) {
-  return SqfliteCipherQueryExecutor.inDatabaseFolder(
+  return SqfliteCipherQueryExecutor(
     path: dbPath,
     password: encryptionKey,
     singleInstance: true,

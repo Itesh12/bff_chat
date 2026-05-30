@@ -32,10 +32,10 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
                 if (!controller.isSetup.value) {
                   if (controller.isConfirmingMode.value) {
                     title = 'Confirm Vault PIN';
-                    subtitle = 'Re-enter your 4-to-8 digit PIN to confirm';
+                    subtitle = 'Re-enter your 4-digit PIN to confirm';
                   } else {
                     title = 'Create Vault PIN';
-                    subtitle = 'Choose a secure 4-to-8 digit PIN';
+                    subtitle = 'Choose a secure 4-digit PIN';
                   }
                 } else {
                   title = 'Vault Locked';
@@ -74,7 +74,7 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: List.generate(
-                      8,
+                      4,
                       (index) {
                         final hasDigit = index < text.length;
                         return Container(

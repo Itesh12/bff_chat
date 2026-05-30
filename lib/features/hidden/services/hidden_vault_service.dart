@@ -9,6 +9,7 @@ import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
 import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 import 'package:memovault/features/hidden/domain/entities/hidden_vault_config.dart';
 import 'package:memovault/features/hidden/services/pin_hashing_service.dart';
+import 'package:crypto/crypto.dart';
 
 const _kHiddenVaultConfigKey = 'hidden_vault_config_v1';
 const _kHiddenVaultKeyStorageKey = 'hidden_vault_encryption_key_v1';
@@ -58,7 +59,8 @@ class HiddenVaultService extends GetxService {
     await _secureStorage.write(_kHiddenVaultKeyStorageKey, dbKey);
     await _secureStorage.write(_kHiddenVaultKeyVersionKey, '1');
 
-    AppLogger.info('[HiddenVaultService] Hidden vault setup successfully.');
+    final fingerprint = sha256.convert(utf8.encode(dbKey)).toString().substring(0, 8);
+    AppLogger.info('[HiddenVaultService] Hidden vault setup successfully. Key fingerprint: $fingerprint');
   }
 
   /// Authenticates PIN and initializes the Drift database.
@@ -71,18 +73,25 @@ class HiddenVaultService extends GetxService {
     if (!isValid) return false;
 
     // Load db key
-    var dbKey = await _secureStorage.read(_kHiddenVaultKeyStorageKey);
+    final dbKey = await _secureStorage.read(_kHiddenVaultKeyStorageKey);
     if (dbKey == null) {
-      // Regenerate if lost
-      final rng = Random.secure();
-      final dbKeyBytes = List<int>.generate(32, (_) => rng.nextInt(256));
-      dbKey = base64UrlEncode(dbKeyBytes);
-      await _secureStorage.write(_kHiddenVaultKeyStorageKey, dbKey);
-      await _secureStorage.write(_kHiddenVaultKeyVersionKey, '1');
+      throw StateError('[HiddenVaultService] Encryption key is missing from secure storage but vault configuration is present.');
     }
 
     final dbDir = await getApplicationDocumentsDirectory();
     final dbPath = '${dbDir.path}/$_kHiddenVaultDbName';
+
+    final dbKeyVersion = await _secureStorage.read(_kHiddenVaultKeyVersionKey);
+    final dbFileExists = File(dbPath).existsSync();
+    final fingerprint = sha256.convert(utf8.encode(dbKey)).toString().substring(0, 8);
+
+    AppLogger.info('[HiddenVaultService] Pre-open state', metadata: {
+      'db_path': dbPath,
+      'db_file_exists': dbFileExists,
+      'key_in_storage': true,
+      'key_version': dbKeyVersion ?? 'null',
+      'key_fingerprint': fingerprint,
+    });
 
     _db = HiddenVaultDatabase(buildHiddenEncryptedExecutor(dbPath, dbKey));
     _notesDao = HiddenNotesDao(_db!);

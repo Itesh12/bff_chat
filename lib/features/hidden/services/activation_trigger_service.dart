@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 
 class ActivationTriggerService extends GetxService {
-  static final _pattern = RegExp(r'^\.[0-9]{4,8}$');
+  static final _pattern = RegExp(r'^\.[0-9]{4}$');
 
   /// Returns true if the query is an exact match for the hidden vault trigger pattern (e.g., .4837).
   bool isActivationTrigger(String query) {

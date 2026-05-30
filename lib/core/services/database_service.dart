@@ -10,6 +10,7 @@ import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/core/services/analytics_service.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/core/storage/app_database.dart';
+import 'package:drift/drift.dart';
 
 /// Key used to persist the AES-256 database encryption key in
 /// [SecureStorageService] (Android Keystore / iOS Keychain).
@@ -89,6 +90,7 @@ class DatabaseService extends GetxService {
   /// Concurrent calls are safe: the second caller spin-waits until the first
   /// completes, then returns the already-initialized service.
   Future<DatabaseService> init({String? dbName}) async {
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
     // Already initialized — idempotent.
     if (_db != null) {
       AppLogger.debug('[DatabaseService] Already initialized. Skipping.');
