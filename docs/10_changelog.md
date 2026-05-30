@@ -8,6 +8,22 @@
 
 ## [Unreleased]
 
+### Added (Phase 1.2 Core Architecture — 2026-05-30)
+- `docs/14_phase1_2_core_architecture_plan.md` — Detailed implementation plan for Phase 1.2 Core Architecture
+- `lib/core/config/env_config.dart` — Environment configurations abstracting Firebase project details, logging, and analytics settings
+- `lib/core/errors/failures.dart` — Generic failure contracts and infrastructure-specific sub-classes
+- `lib/core/errors/result.dart` — Functional result wrapper mapping success and failure branches
+- `lib/core/services/network_service.dart` — Placeholder for global connectivity monitoring
+- `lib/core/bindings/initial_binding.dart` — Initial DI binder registering global singletons permanently
+- `lib/core/routes/app_pages.dart` — Centralized Named Router configuration mapping routes to screen pages
+- `test/core/errors/result_test.dart` — Unit tests for the Result functional folds
+- `test/core/config/env_config_test.dart` — Unit tests for EnvConfig parameters across all three flavor environments
+
+### Changed (Phase 1.2 Core Architecture — 2026-05-30)
+- `lib/app.dart` — Updated to use `InitialBinding` and `AppPages.pages` routing table
+- `lib/main_dev.dart`, `lib/main_staging.dart`, `lib/main_prod.dart` — Updated to initialize `EnvConfig` with their respective flavor environments at launch
+- `README.md` and `docs/12_phase1_implementation_plan.md` — Updated to mark Phase 1.2 complete
+
 ### Added (Phase 1.1 Project Bootstrap — 2026-05-30)
 - `assets/icons/icon_prod.png`, `icon_dev.png`, `icon_staging.png` — Generated premium icons for each flavor
 - `lib/main_dev.dart`, `lib/main_staging.dart`, `lib/main_prod.dart` — Entry point files for each flavor

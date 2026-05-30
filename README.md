@@ -4,7 +4,7 @@
 > **Internal project name:** memovault  
 > **Repository:** memovault  
 > **Public identity:** A premium Notes / Vault application  
-> **Current Phase:** 1.2 — Core Architecture (🟡 Planning)  
+> **Current Phase:** 1.3 — Theme & Design System (🟡 Planning)  
 > **Phase 0:** 🔒 LOCKED & APPROVED
 
 ---
@@ -40,6 +40,7 @@ See [docs/09_development_workflow.md](docs/09_development_workflow.md) for the f
 | 11 | [Risk Register](docs/11_risk_register.md) | 18 risks across technical, security, and operational categories | ✅ Complete |
 | 12 | [Phase 1 Implementation Plan](docs/12_phase1_implementation_plan.md) | Phase 1 checkpoint overview (1.1–1.6) | 🟡 In Progress |
 | 13 | [Phase 1.1 Bootstrap Plan](docs/13_phase1_1_bootstrap_plan.md) | Detailed plan for Phase 1.1 Project Bootstrap | ✅ Complete |
+| 14 | [Phase 1.2 Core Architecture Plan](docs/14_phase1_2_core_architecture_plan.md) | Detailed plan for Phase 1.2 Core Architecture | ✅ Complete |
 
 ---
 
@@ -64,8 +65,8 @@ See [docs/09_development_workflow.md](docs/09_development_workflow.md) for the f
 |---|---|---|
 | **0** | Product Foundation & Architecture | 🔒 LOCKED & APPROVED |
 | **1.1** | Project Bootstrap | ✅ Complete |
-| 1.2 | Core Architecture | 🟡 Planning |
-| 1.3 | Theme & Design System | ⬜ Pending |
+| **1.2** | Core Architecture | ✅ Complete |
+| 1.3 | Theme & Design System | 🟡 Planning |
 | 1.4 | Storage Layer | ⬜ Pending |
 | 1.5 | Observability Layer | ⬜ Pending |
 | 1.6 | Framework Validation | ⬜ Pending |
