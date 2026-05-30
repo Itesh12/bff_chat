@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:drift/drift.dart' hide isNotNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -224,10 +225,11 @@ void main() {
       expect(originalKey, isNotNull);
       dbService1.onClose();
 
-      // Tamper: overwrite stored key with an incorrect value.
-      await secureStorage.write('db_encryption_key_v1', 'mismatched_wrong_key');
+      // Tamper: overwrite stored key with an incorrect but valid-length key.
+      final wrongButValidSizeKey = DatabaseService.generate256BitKey();
+      await secureStorage.write('db_encryption_key_v1', wrongButValidSizeKey);
 
-      // Second launch — simulator throws for 'mismatched_wrong_key'.
+      // Second launch — simulator throws for wrongButValidSizeKey.
       // DatabaseService must: catch → wipe (delete key) → regenerate → reopen.
       final dbService2 = DatabaseService(dbFactory: simulator.call);
       await dbService2.init(dbName: 'test_adr011.db');
@@ -235,12 +237,61 @@ void main() {
       final newKey = await secureStorage.read('db_encryption_key_v1');
       expect(newKey, isNotNull,
           reason: 'A fresh key must be stored after recovery');
-      expect(newKey, isNot(equals('mismatched_wrong_key')),
+      expect(newKey, isNot(equals(wrongButValidSizeKey)),
           reason: 'The wrong key must be replaced by recovery');
       expect(dbService2.db, isNotNull,
           reason: 'DB must be accessible after recovery');
 
       dbService2.onClose();
+    });
+
+    // ── 5. Singleton Protection ──────────────────────────────────────────────
+    test('singleton protection — subsequent init() calls are ignored', () async {
+      final factory = _FakeDbFactory();
+      final dbService = DatabaseService(dbFactory: factory.call);
+      await dbService.init(dbName: 'test_singleton.db');
+
+      final firstDb = dbService.db;
+      
+      // Subsequent initialization should skip and return same instance
+      await dbService.init(dbName: 'test_singleton.db');
+      expect(dbService.db, same(firstDb));
+
+      await dbService.close();
+    });
+
+    // ── 6. Key Length Validation ──────────────────────────────────────────────
+    test('key length validation — rejects malformed or wrong-sized key and recovers', () async {
+      final factory = _FakeDbFactory();
+      final dbService = DatabaseService(dbFactory: factory.call);
+      
+      // Store a malformed (too short) key in secure storage first
+      await secureStorage.write('db_encryption_key_v1', 'dG9vLXNob3J0LWtleQ=='); // "too-short-key" in base64
+      
+      await dbService.init(dbName: 'test_key_len.db');
+
+      // Decryption failure/validation failure must trigger ADR-011 recovery
+      // and generate a valid 256-bit (32-byte) key.
+      final correctedKey = await secureStorage.read('db_encryption_key_v1');
+      expect(correctedKey, isNotNull);
+      final decodedBytes = base64Url.decode(correctedKey!);
+      expect(decodedBytes.length, equals(32), reason: 'Corrected key must be exactly 32 bytes');
+
+      await dbService.close();
+    });
+
+    // ── 7. Explicit Close Handling ────────────────────────────────────────────
+    test('explicit close() closes connection and invalidates database reference', () async {
+      final factory = _FakeDbFactory();
+      final dbService = DatabaseService(dbFactory: factory.call);
+      await dbService.init(dbName: 'test_close.db');
+
+      expect(dbService.db, isNotNull);
+
+      await dbService.close();
+
+      // Accessing db now must throw StateError
+      expect(() => dbService.db, throwsStateError);
     });
   });
 }

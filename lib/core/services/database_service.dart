@@ -60,8 +60,23 @@ class DatabaseService extends GetxService {
 
   /// Initializes (or recovers) the encrypted database.
   Future<DatabaseService> init({String? dbName}) async {
+    if (_db != null) {
+      debugPrint('[DatabaseService] Database already initialized. Skipping.');
+      return this;
+    }
+
     final secureStorage = Get.find<SecureStorageService>();
-    final dbPath = dbName ?? _kDatabaseFileName;
+    final name = dbName ?? _kDatabaseFileName;
+
+    // Resolve absolute path inside getApplicationDocumentsDirectory()
+    // unless it is an explicit absolute path or test database path.
+    final String dbPath;
+    if (name.contains('/') || name.contains('\\') || name.startsWith('test_')) {
+      dbPath = name;
+    } else {
+      final dbDir = await getApplicationDocumentsDirectory();
+      dbPath = '${dbDir.path}/$name';
+    }
 
     final encryptionKey = await _resolveEncryptionKey(secureStorage);
     _db = await _openDatabase(dbPath, encryptionKey, secureStorage);
@@ -79,7 +94,7 @@ class DatabaseService extends GetxService {
     if (existing != null && existing.isNotEmpty) {
       return existing;
     }
-    final newKey = _generate256BitKey();
+    final newKey = generate256BitKey();
     await storage.write(_kDbEncryptionKeyStorageKey, newKey);
     debugPrint('[DatabaseService] New 256-bit encryption key generated and stored.');
     return newKey;
@@ -93,6 +108,12 @@ class DatabaseService extends GetxService {
     SecureStorageService secureStorage,
   ) async {
     try {
+      // Key length validation: MUST be exactly 32 bytes (256 bits) when decoded.
+      final decodedBytes = base64Url.decode(encryptionKey);
+      if (decodedBytes.length != 32) {
+        throw ArgumentError('Database encryption key must be exactly 256 bits (32 bytes).');
+      }
+
       final db = _dbFactory(dbPath, encryptionKey);
       // Force open to trigger key verification before returning.
       await db.customStatement('SELECT 1');
@@ -117,8 +138,7 @@ class DatabaseService extends GetxService {
   ) async {
     await secureStorage.delete(_kDbEncryptionKeyStorageKey);
     try {
-      final dbDir = await getApplicationDocumentsDirectory();
-      await deleteDatabase('${dbDir.path}/$dbPath');
+      await deleteDatabase(dbPath);
     } catch (_) {
       // If deletion fails, the next open attempt will regenerate anyway.
     }
@@ -127,15 +147,24 @@ class DatabaseService extends GetxService {
 
   /// Generates a cryptographically secure random 256-bit (32-byte) key,
   /// encoded as Base64.
-  static String _generate256BitKey() {
+  static String generate256BitKey() {
     final rng = Random.secure();
     final keyBytes = List<int>.generate(32, (_) => rng.nextInt(256));
     return base64UrlEncode(keyBytes);
   }
 
+  /// Closes the database connection and resets internal references.
+  Future<void> close() async {
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+      debugPrint('[DatabaseService] Database connection closed.');
+    }
+  }
+
   @override
   void onClose() {
-    _db?.close();
+    close();
     super.onClose();
   }
 }
