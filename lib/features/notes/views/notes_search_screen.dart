@@ -5,6 +5,8 @@ import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/features/notes/controllers/notes_controller.dart';
 import 'package:memovault/features/notes/controllers/notes_search_controller.dart';
 
+import 'package:memovault/features/hidden/services/activation_trigger_service.dart';
+
 class NotesSearchScreen extends StatefulWidget {
   const NotesSearchScreen({super.key});
 
@@ -48,7 +50,14 @@ class _NotesSearchScreenState extends State<NotesSearchScreen> {
               focusNode: _focusNode,
               hintText: 'Type at least 2 characters...',
               onChanged: searchController.onQueryChanged,
-              onSubmitted: searchController.submitQuery,
+              onSubmitted: (value) {
+                final activationTrigger = Get.find<ActivationTriggerService>();
+                if (activationTrigger.isActivationTrigger(value)) {
+                  _textController.clear();
+                  _focusNode.unfocus();
+                }
+                searchController.submitQuery(value);
+              },
             ),
           ),
 

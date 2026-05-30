@@ -56,8 +56,9 @@ class CategoriesScreen extends GetView<NotesController> {
               const AppSectionHeader(title: 'Select Theme Color'),
               const AppGap.v8(),
               // Presets grid (4x3)
-              SizedBox(
+              Container(
                 height: 140,
+                color: Colors.transparent,
                 child: GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),

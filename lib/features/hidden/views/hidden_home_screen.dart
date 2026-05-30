@@ -116,40 +116,42 @@ class HiddenHomeScreen extends GetView<HiddenHomeController> {
       context,
       title: 'New Secret Note',
       isScrollControlled: true,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.s8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AppTextField(
-              controller: titleController,
-              hintText: 'Note Title',
-              labelText: 'Title',
-              autofocus: true,
-            ),
-            const AppGap.v16(),
-            AppTextField.multiline(
-              controller: bodyController,
-              hintText: 'Type your secret note here...',
-              labelText: 'Body',
-              minLines: 5,
-            ),
-            const AppGap.v24(),
-            AppButton.primary(
-              text: 'Save Note',
-              onPressed: () async {
-                final title = titleController.text.trim();
-                final body = bodyController.text.trim();
-                if (title.isNotEmpty || body.isNotEmpty) {
-                  await controller.createNote(title, body);
-                }
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
-            ),
-            const AppGap.v12(),
-          ],
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.s8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppTextField(
+                controller: titleController,
+                hintText: 'Note Title',
+                labelText: 'Title',
+                autofocus: true,
+              ),
+              const AppGap.v16(),
+              AppTextField.multiline(
+                controller: bodyController,
+                hintText: 'Type your secret note here...',
+                labelText: 'Body',
+                minLines: 5,
+              ),
+              const AppGap.v24(),
+              AppButton.primary(
+                text: 'Save Note',
+                onPressed: () async {
+                  final title = titleController.text.trim();
+                  final body = bodyController.text.trim();
+                  if (title.isNotEmpty || body.isNotEmpty) {
+                    await controller.createNote(title, body);
+                  }
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              const AppGap.v12(),
+            ],
+          ),
         ),
       ),
     );
@@ -165,43 +167,45 @@ class HiddenHomeScreen extends GetView<HiddenHomeController> {
       context,
       title: 'Edit Secret Note',
       isScrollControlled: true,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.s8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AppTextField(
-              controller: titleController,
-              hintText: 'Note Title',
-              labelText: 'Title',
-            ),
-            const AppGap.v16(),
-            AppTextField.multiline(
-              controller: bodyController,
-              hintText: 'Type your secret note here...',
-              labelText: 'Body',
-              minLines: 5,
-            ),
-            const AppGap.v24(),
-            AppButton.primary(
-              text: 'Save Changes',
-              onPressed: () async {
-                final title = titleController.text.trim();
-                final body = bodyController.text.trim();
-                if (title.isNotEmpty || body.isNotEmpty) {
-                  final updatedNote = note.copyWith(
-                    title: title,
-                    body: body,
-                  );
-                  await controller.updateNote(updatedNote);
-                }
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
-            ),
-            const AppGap.v12(),
-          ],
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.s8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppTextField(
+                controller: titleController,
+                hintText: 'Note Title',
+                labelText: 'Title',
+              ),
+              const AppGap.v16(),
+              AppTextField.multiline(
+                controller: bodyController,
+                hintText: 'Type your secret note here...',
+                labelText: 'Body',
+                minLines: 5,
+              ),
+              const AppGap.v24(),
+              AppButton.primary(
+                text: 'Save Changes',
+                onPressed: () async {
+                  final title = titleController.text.trim();
+                  final body = bodyController.text.trim();
+                  if (title.isNotEmpty || body.isNotEmpty) {
+                    final updatedNote = note.copyWith(
+                      title: title,
+                      body: body,
+                    );
+                    await controller.updateNote(updatedNote);
+                  }
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              const AppGap.v12(),
+            ],
+          ),
         ),
       ),
     );

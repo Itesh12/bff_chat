@@ -9,6 +9,8 @@ import 'package:memovault/domain/notes/notes_repository.dart';
 import 'package:memovault/domain/notes/categories_repository.dart';
 import 'package:memovault/domain/notes/note_metrics.dart';
 
+import 'package:memovault/core/observability/performance_tracker.dart';
+
 class NotesController extends GetxController {
   final NotesRepository _notesRepository;
   final CategoriesRepository _categoriesRepository;
@@ -48,6 +50,7 @@ class NotesController extends GetxController {
   }
 
   Future<void> _loadPreferencesAndBootstrap() async {
+    PerformanceTracker.start('notes_dashboard_open');
     isLoading.value = true;
     try {
       // 1. Read persistent preferences
@@ -56,7 +59,9 @@ class NotesController extends GetxController {
       selectedCategoryId.value = await _prefsService.getLastSelectedCategory();
 
       // 2. Fetch all categories
+      PerformanceTracker.start('category_load');
       await refreshCategories();
+      PerformanceTracker.finish('category_load');
 
       // 3. Initiate Drift reactive DB streams
       _restartNotesSubscription();
@@ -67,6 +72,7 @@ class NotesController extends GetxController {
       AppLogger.error('Failed to bootstrap NotesController', error: e, stackTrace: stack);
     } finally {
       isLoading.value = false;
+      PerformanceTracker.finish('notes_dashboard_open');
     }
   }
 
@@ -130,14 +136,17 @@ class NotesController extends GetxController {
 
   // --- CRUD Note Mutations ---
   Future<NoteEntity> createNote({required String title, required String body, String? categoryId}) async {
+    PerformanceTracker.start('create_note');
     final note = await _notesRepository.createNote(title: title, body: body, categoryId: categoryId);
     final hasCategory = categoryId != null;
     AppLogger.info('note_created', metadata: {'has_category': hasCategory});
     await refreshStats();
+    PerformanceTracker.finish('create_note');
     return note;
   }
 
   Future<NoteEntity> updateNote(NoteEntity note) async {
+    PerformanceTracker.start('edit_note');
     final updated = await _notesRepository.updateNote(note);
     final wordCount = NoteMetrics.calculateWordCount(note.body);
     
@@ -153,6 +162,7 @@ class NotesController extends GetxController {
       'char_count_bucket': charBucket,
       'word_count': wordCount,
     });
+    PerformanceTracker.finish('edit_note');
     return updated;
   }
 

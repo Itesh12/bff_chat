@@ -33,28 +33,23 @@ class NoteDetailScreen extends GetView<NotesController> {
 
     final borderThemeColor = theme.dividerColor;
 
-    return Obx(() {
-      final note = controller.notes.firstWhereOrNull((n) => n.id == id);
-      if (note == null) {
-        return const AppScaffold(
-          title: 'View Note',
-          body: Center(child: Text('Note not found.')),
-        );
-      }
-
-      final category = controller.categories.firstWhereOrNull((c) => c.id == note.categoryId);
-      final categoryColor = _parseCategoryColor(context, category?.colorHex);
-
-      return AppScaffold(
-        title: 'View Note',
-        actions: [
-          AppIconButton.secondary(
+    return AppScaffold(
+      title: 'View Note',
+      actions: [
+        Obx(() {
+          final note = controller.notes.firstWhereOrNull((n) => n.id == id);
+          if (note == null) return const SizedBox.shrink();
+          return AppIconButton.secondary(
             icon: note.isFavorite ? Icons.star : Icons.star_border,
             tooltip: 'Favorite',
             onPressed: () => controller.toggleFavorite(note.id),
-          ),
-          const AppGap.h8(),
-          AppIconButton.secondary(
+          );
+        }),
+        const AppGap.h8(),
+        Obx(() {
+          final note = controller.notes.firstWhereOrNull((n) => n.id == id);
+          if (note == null) return const SizedBox.shrink();
+          return AppIconButton.secondary(
             icon: Icons.archive_outlined,
             tooltip: 'Archive Note',
             onPressed: () {
@@ -62,9 +57,13 @@ class NoteDetailScreen extends GetView<NotesController> {
               Get.back();
               AppSnackBar.success(title: 'Archived', message: 'Note moved to archive.');
             },
-          ),
-          const AppGap.h8(),
-          AppIconButton.danger(
+          );
+        }),
+        const AppGap.h8(),
+        Obx(() {
+          final note = controller.notes.firstWhereOrNull((n) => n.id == id);
+          if (note == null) return const SizedBox.shrink();
+          return AppIconButton.danger(
             icon: Icons.delete_outline,
             tooltip: 'Delete Note',
             onPressed: () {
@@ -79,10 +78,20 @@ class NoteDetailScreen extends GetView<NotesController> {
                 },
               );
             },
-          ),
-          const AppGap.h12(),
-        ],
-        body: Column(
+          );
+        }),
+        const AppGap.h12(),
+      ],
+      body: Obx(() {
+        final note = controller.notes.firstWhereOrNull((n) => n.id == id);
+        if (note == null) {
+          return const Center(child: Text('Note not found.'));
+        }
+
+        final category = controller.categories.firstWhereOrNull((c) => c.id == note.categoryId);
+        final categoryColor = _parseCategoryColor(context, category?.colorHex);
+
+        return Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
@@ -170,13 +179,13 @@ class NoteDetailScreen extends GetView<NotesController> {
               ),
             ),
           ],
-        ),
-        floatingActionButton: AppButton.primary(
-          text: 'Edit Note',
-          icon: Icons.edit,
-          onPressed: () => Get.toNamed('/notes/editor', arguments: id),
-        ),
-      );
-    });
+        );
+      }),
+      floatingActionButton: AppButton.primary(
+        text: 'Edit Note',
+        icon: Icons.edit,
+        onPressed: () => Get.toNamed('/notes/editor', arguments: id),
+      ),
+    );
   }
 }

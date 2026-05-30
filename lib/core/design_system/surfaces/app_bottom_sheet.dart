@@ -3,6 +3,7 @@ import 'package:memovault/core/theme/app_spacing.dart';
 import 'package:memovault/core/theme/app_radius.dart';
 import 'package:memovault/core/theme/app_gap.dart';
 import 'package:memovault/core/theme/app_typography.dart';
+import 'package:memovault/core/observability/performance_tracker.dart';
 
 /// A static design system helper to trigger consistent custom bottom sheets.
 /// Standardizes upper corner radiuses, drag indicators, padding buffers, and dark mode colors.
@@ -19,6 +20,8 @@ abstract final class AppBottomSheet {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    PerformanceTracker.start('bottom_sheet_open');
+
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: isScrollControlled,
@@ -27,6 +30,7 @@ abstract final class AppBottomSheet {
       ),
       backgroundColor: theme.cardColor,
       builder: (context) {
+        PerformanceTracker.finish('bottom_sheet_open');
         return SafeArea(
           child: Padding(
             padding: EdgeInsets.only(

@@ -155,8 +155,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             ),
           ),
           const AppGap.v8(),
-          SizedBox(
+          Container(
             height: 200,
+            color: Colors.transparent,
             child: Obx(() {
               final cats = _notesController.categories;
               if (cats.isEmpty) {
@@ -270,9 +271,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           Center(
             child: Padding(
               padding: const EdgeInsets.only(right: AppSpacing.s16),
-              child: SizedBox(
+              child: Container(
                 height: 16,
                 width: 16,
+                color: Colors.transparent,
                 child: _isSaving
                     ? const AppLoading.small()
                     : Icon(

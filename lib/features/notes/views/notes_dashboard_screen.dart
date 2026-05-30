@@ -131,8 +131,9 @@ class NotesDashboardScreen extends GetView<NotesController> {
             final activeCat = controller.selectedCategoryId.value;
             final categoriesList = controller.categories;
             
-            return SizedBox(
+            return Container(
               height: 48,
+              color: Colors.transparent,
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16),
                 scrollDirection: Axis.horizontal,

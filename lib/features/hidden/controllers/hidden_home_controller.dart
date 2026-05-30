@@ -54,6 +54,5 @@ class HiddenHomeController extends GetxController {
 
   void logout() {
     _sessionService.lockSession();
-    Get.offAllNamed('/home');
   }
 }

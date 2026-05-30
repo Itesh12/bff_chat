@@ -4,6 +4,10 @@ import 'package:get/get.dart';
 import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
 
+import 'package:memovault/core/routes/app_routes.dart';
+import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
+import 'package:memovault/features/hidden/controllers/hidden_activation_controller.dart';
+
 enum HiddenSessionState { locked, activating, active }
 
 class HiddenSessionService extends GetxService with WidgetsBindingObserver {
@@ -47,6 +51,14 @@ class HiddenSessionService extends GetxService with WidgetsBindingObserver {
       state.value = HiddenSessionState.locked;
       _vaultService.lockVault();
       AppLogger.info('[HiddenSessionService] Session locked.');
+
+      // Auto-redirect out of hidden vault routes on lock
+      final currentRoute = Get.currentRoute;
+      if (currentRoute == AppRoutes.hiddenHome || currentRoute == AppRoutes.hiddenPin) {
+        Get.offAllNamed(AppRoutes.notes);
+        Get.delete<HiddenHomeController>(force: true);
+        Get.delete<HiddenActivationController>(force: true);
+      }
     }
   }
 

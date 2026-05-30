@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:memovault/core/design_system/design_system.dart';
 
 /// Placeholder home screen — Phase 1.1 bootstrap only.
 /// All real UI is implemented in Phase 2+.
@@ -7,7 +8,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return const AppScaffold(
       body: Center(
         child: Text('MemoVault — Framework Checkpoint 1.1'),
       ),

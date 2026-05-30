@@ -8,6 +8,8 @@ import 'package:memovault/domain/notes/notes_repository.dart';
 import 'package:memovault/core/theme/app_durations.dart';
 import 'package:memovault/features/hidden/services/activation_trigger_service.dart';
 
+import 'package:memovault/core/observability/performance_tracker.dart';
+
 class NotesSearchController extends GetxController {
   final NotesRepository _repository;
 
@@ -72,6 +74,7 @@ class NotesSearchController extends GetxController {
   }
 
   Future<void> _executeSearch(String val) async {
+    PerformanceTracker.start('search_notes');
     isSearching.value = true;
     try {
       final searchResults = await _repository.searchNotes(val);
@@ -84,6 +87,7 @@ class NotesSearchController extends GetxController {
       results.clear();
     } finally {
       isSearching.value = false;
+      PerformanceTracker.finish('search_notes');
     }
   }
 }

@@ -12,12 +12,13 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
 
     return AppScaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               const AppGap.v48(),
               Icon(
                 Icons.lock_outline_rounded,
@@ -100,7 +101,7 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
               Center(
                 child: Obx(() {
                   final err = controller.errorMessage.value;
-                  if (err.isEmpty) return const SizedBox(height: 20);
+                  if (err.isEmpty) return const AppGap.v24();
                   return Text(
                     err,
                     style: AppTypography.bodyMedium.copyWith(
@@ -114,10 +115,9 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
               const AppGap.v24(),
 
               // Keypad
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 320),
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 320),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -153,7 +153,6 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
                     ),
                   ),
                 ),
-              ),
               const AppGap.v16(),
 
               // Submit and Wipe Buttons
@@ -184,6 +183,7 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -201,7 +201,7 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: AppRadius.max,
           onTap: () => controller.appendDigit(digit),
           child: Center(
             child: Text(
@@ -235,7 +235,7 @@ class HiddenPinScreen extends GetView<HiddenActivationController> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: AppRadius.max,
           onTap: onPressed,
           child: Center(
             child: Icon(
