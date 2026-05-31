@@ -110,8 +110,8 @@ class MessagingSetupController extends GetxController {
       usernameController.text = rawVal;
     }
     
-    // Normalize case and validate format
-    final regex = RegExp(r'^(?!_)(?!.*__)[a-z0-9_]{3,20}(?<!_)$');
+    // Normalize case and validate format (must start with letter, no leading/trailing/double underscores)
+    final regex = RegExp(r'^[a-z](?!.*__)[a-z0-9_]{2,19}(?<!_)$');
     if (!regex.hasMatch(normalized)) {
       isCheckingUsername.value = false;
       isUsernameAvailable.value = false;

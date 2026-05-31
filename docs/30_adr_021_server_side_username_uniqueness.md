@@ -34,8 +34,8 @@ To prevent SQL/NoSQL injection, visual homograph attacks, and UI overflows, we e
 *   **Length**: Strictly **3 to 20 characters** (inclusive).
 *   **Character Set**: Strictly ASCII lowercase alphanumeric characters and underscores are allowed: **`a-z`, `0-9`, `_`**.
 *   **Impersonation & Homograph Prevention**: By strictly restricting the character set to ASCII-only (`a-z0-9_`), homograph attacks using Greek, Cyrillic, or other lookalike Unicode characters (e.g. Greek alpha `α` or Cyrillic `а` instead of Latin `a`) are natively blocked.
-*   **Regex Pattern**: The handle must match the regular expression: `^(?!_)(?!.*__)[a-z0-9_]{3,20}(?<!_)$`
-    - This prevents leading underscores, trailing underscores, and consecutive underscores (e.g. `__john`, `john__`, `john__doe`), ensuring readable, clean namespace handles.
+*   **Regex Pattern**: The handle must match the regular expression: `^[a-z](?!.*__)[a-z0-9_]{2,19}(?<!_)$`
+    - This prevents starting with a digit or underscore, trailing underscores, and consecutive underscores (e.g. `1john`, `__john`, `john__`, `john__doe`), ensuring readable, clean namespace handles starting with a letter.
 
 ### 3. Reserved Names Blacklist
 To prevent impersonation of system utilities, moderators, or developers, a strict blacklist of reserved words is enforced. No user can register a canonical username that is equal to, or starts with, any of the following prefixes:
@@ -62,7 +62,7 @@ To prevent impersonation of system utilities, moderators, or developers, a stric
                     ])
                     && request.resource.data.uid == request.auth.uid
                     && request.resource.data.username == username
-                    && username.matches('^(?!_)(?!.*__)[a-z0-9_]{3,20}(?<!_)$')
+                    && username.matches('^[a-z](?!.*__)[a-z0-9_]{2,19}(?<!_)$')
                     && !(username in ['admin', 'administrator', 'moderator', 'support', 'system', 'root', 'memovault']);
       allow update, delete: if false; // Immutable once registered (Option A)
     }

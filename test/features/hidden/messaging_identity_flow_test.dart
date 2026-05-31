@@ -124,7 +124,11 @@ void main() {
       expect(controller.isUsernameAvailable.value, true);
       expect(controller.username.value, 'john');
 
-      // 5. Rejection of leading, trailing, and double underscores
+      // 5. Rejection of leading, trailing, and double underscores, and starting with a digit
+      await controller.checkUsernameUniqueness('1john');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('123abc');
+      expect(controller.isUsernameAvailable.value, false);
       await controller.checkUsernameUniqueness('__john');
       expect(controller.isUsernameAvailable.value, false);
       await controller.checkUsernameUniqueness('john__');
