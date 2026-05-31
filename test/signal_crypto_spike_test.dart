@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print, prefer_const_declarations
 import 'dart:typed_data';
 import 'package:libsignal/libsignal.dart';
 import 'package:flutter_test/flutter_test.dart';

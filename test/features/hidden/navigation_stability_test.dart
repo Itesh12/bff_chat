@@ -329,6 +329,7 @@ class FakeMessagingRepository implements MessagingRepository {
 class FakeMessagingIdentityService implements MessagingIdentityService {
   final Rx<MessagingSetupState> state = MessagingSetupState.unconfigured.obs;
   String? _username;
+  String? _displayName;
   String? _pubKey;
   String? _privKey;
 
@@ -349,6 +350,14 @@ class FakeMessagingIdentityService implements MessagingIdentityService {
   }
 
   @override
+  Future<String?> getDisplayName() async => _displayName;
+
+  @override
+  Future<void> saveDisplayName(String displayName) async {
+    _displayName = displayName;
+  }
+
+  @override
   Future<String?> getPublicKey() async => _pubKey;
 
   @override
@@ -364,6 +373,7 @@ class FakeMessagingIdentityService implements MessagingIdentityService {
   Future<void> resetIdentity() async {
     state.value = MessagingSetupState.unconfigured;
     _username = null;
+    _displayName = null;
     _pubKey = null;
     _privKey = null;
   }

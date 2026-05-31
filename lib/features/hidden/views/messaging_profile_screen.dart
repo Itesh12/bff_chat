@@ -14,6 +14,7 @@ class MessagingProfileScreen extends StatefulWidget {
 class _MessagingProfileScreenState extends State<MessagingProfileScreen> {
   final _identityService = Get.find<MessagingIdentityService>();
   String _username = '';
+  String _displayName = '';
   String _publicKey = '';
 
   @override
@@ -24,9 +25,11 @@ class _MessagingProfileScreenState extends State<MessagingProfileScreen> {
 
   Future<void> _loadProfile() async {
     final user = await _identityService.getUsername();
+    final display = await _identityService.getDisplayName();
     final key = await _identityService.getPublicKey();
     setState(() {
       _username = user ?? '@unknown';
+      _displayName = display ?? (user?.startsWith('@') == true ? user!.substring(1) : (user ?? 'unknown'));
       _publicKey = key ?? 'Fingerprint not calculated';
     });
   }
@@ -132,10 +135,17 @@ class _MessagingProfileScreenState extends State<MessagingProfileScreen> {
                     ),
                     const AppGap.v8(),
                     Text(
-                      _username,
+                      _displayName,
                       style: AppTypography.headlineSmall.copyWith(
                         fontWeight: FontWeight.bold,
                         color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const AppGap.v4(),
+                    Text(
+                      _username,
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
                       ),
                     ),
                     const AppGap.v16(),

@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
@@ -49,7 +52,8 @@ class MessagingSetupController extends GetxController {
     if (savedUser != null) {
       final cleanName = savedUser.startsWith('@') ? savedUser.substring(1) : savedUser;
       username.value = cleanName;
-      usernameController.text = cleanName;
+      final savedDisplay = await _identityService.getDisplayName();
+      usernameController.text = savedDisplay ?? cleanName;
     }
   }
 
@@ -80,16 +84,38 @@ class MessagingSetupController extends GetxController {
     });
   }
 
+  static String normalizeUsername(String input) {
+    final buffer = StringBuffer();
+    for (var i = 0; i < input.length; i++) {
+      final codeUnit = input.codeUnitAt(i);
+      if (codeUnit >= 0xff21 && codeUnit <= 0xff3a) {
+        buffer.writeCharCode(codeUnit - 0xff21 + 0x0041);
+      } else if (codeUnit >= 0xff41 && codeUnit <= 0xff5a) {
+        buffer.writeCharCode(codeUnit - 0xff41 + 0x0061);
+      } else if (codeUnit >= 0xff10 && codeUnit <= 0xff19) {
+        buffer.writeCharCode(codeUnit - 0xff10 + 0x0030);
+      } else if (codeUnit == 0xff3f) {
+        buffer.writeCharCode(0x005f);
+      } else {
+        buffer.writeCharCode(codeUnit);
+      }
+    }
+    return buffer.toString().trim().toLowerCase();
+  }
+
   Future<void> checkUsernameUniqueness(String rawVal) async {
     isCheckingUsername.value = true;
-    final normalized = rawVal.trim().toLowerCase();
+    final normalized = normalizeUsername(rawVal);
+    if (usernameController.text.isEmpty && rawVal.isNotEmpty) {
+      usernameController.text = rawVal;
+    }
     
     // Normalize case and validate format
-    final regex = RegExp(r'^[a-z0-9_]{3,20}$');
+    final regex = RegExp(r'^(?!_)(?!.*__)[a-z0-9_]{3,20}(?<!_)$');
     if (!regex.hasMatch(normalized)) {
       isCheckingUsername.value = false;
       isUsernameAvailable.value = false;
-      usernameFeedback.value = '3-20 chars, lowecase a-z, 0-9, and _';
+      usernameFeedback.value = '3-20 chars, lowercase a-z, 0-9, and _ (no leading/trailing/double _)';
       return;
     }
 
@@ -123,7 +149,11 @@ class MessagingSetupController extends GetxController {
     onUserInteraction();
     if (!isUsernameAvailable.value || username.value.isEmpty) return;
 
-    await _identityService.saveUsername('@${username.value}');
+    final canonical = username.value;
+    final display = usernameController.text.trim();
+
+    await _identityService.saveUsername('@$canonical');
+    await _identityService.saveDisplayName(display);
     setupState.value = MessagingSetupState.usernameSelected;
     await _identityService.setSetupState(MessagingSetupState.usernameSelected);
     generateSeedPhrase();
@@ -206,13 +236,55 @@ class MessagingSetupController extends GetxController {
       final privKey = _seedRecoveryService.derivePrivateKey(mnemonic);
       final pubKey = _seedRecoveryService.derivePublicKey(privKey);
 
+      // 2. Perform Firestore Transaction Registration if Firebase is initialized
+      if (Firebase.apps.isNotEmpty) {
+        final auth = FirebaseAuth.instance;
+        if (auth.currentUser == null) {
+          await auth.signInAnonymously();
+        }
+        final currentUser = auth.currentUser;
+        if (currentUser == null) {
+          throw Exception('Failed to authenticate anonymously');
+        }
+
+        final firestore = FirebaseFirestore.instance;
+        final docRef = firestore.collection('pseudonyms').doc(username.value);
+        final bundleRef = firestore.collection('prekey_bundles').doc(currentUser.uid);
+
+        await firestore.runTransaction((transaction) async {
+          final docSnapshot = await transaction.get(docRef);
+          if (docSnapshot.exists) {
+            final existingUid = docSnapshot.get('uid');
+            if (existingUid != currentUser.uid) {
+              throw Exception('USERNAME_ALREADY_EXISTS');
+            }
+          }
+
+          // Write pseudonym document
+          transaction.set(docRef, {
+            'username': username.value,
+            'displayName': usernameController.text.trim(),
+            'uid': currentUser.uid,
+            'identityPublicKey': pubKey,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+          // Write prekey bundle document
+          transaction.set(bundleRef, {
+            'uid': currentUser.uid,
+            'identityPublicKey': pubKey,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        });
+      }
+
       // Plaintext mnemonic is wiped immediately (garbage collector hook)
       seedWords.clear();
 
-      // 2. Persist derived keys only
+      // 3. Persist derived keys only
       await _identityService.saveIdentityKeys(pubKey: pubKey, privKey: privKey);
 
-      // 3. Complete onboarding
+      // 4. Complete onboarding
       setupState.value = MessagingSetupState.ready;
       await _identityService.setSetupState(MessagingSetupState.ready);
 
@@ -246,11 +318,36 @@ class MessagingSetupController extends GetxController {
       final privKey = _seedRecoveryService.derivePrivateKey(normalized);
       final pubKey = _seedRecoveryService.derivePublicKey(privKey);
 
-      // Simulate challenge verification against Firestore
-      // Under One Device Rule, signs challenge to prove username ownership
-      await Future.delayed(const Duration(milliseconds: 400));
+      // Restore username/display name from Firestore if initialized, or mock
+      if (Firebase.apps.isNotEmpty) {
+        final auth = FirebaseAuth.instance;
+        if (auth.currentUser == null) {
+          await auth.signInAnonymously();
+        }
 
-      await _identityService.saveUsername('@restored_user');
+        final firestore = FirebaseFirestore.instance;
+        final query = await firestore
+            .collection('pseudonyms')
+            .where('identityPublicKey', isEqualTo: pubKey)
+            .limit(1)
+            .get();
+
+        if (query.docs.isEmpty) {
+          throw Exception('No registered username found for this identity key.');
+        }
+
+        final doc = query.docs.first;
+        final registeredUsername = doc.get('username') as String;
+        final registeredDisplayName = doc.get('displayName') as String;
+
+        await _identityService.saveUsername('@$registeredUsername');
+        await _identityService.saveDisplayName(registeredDisplayName);
+      } else {
+        // Fallback/Mock behavior for tests
+        await _identityService.saveUsername('@restored_user');
+        await _identityService.saveDisplayName('Restored User');
+      }
+
       await _identityService.saveIdentityKeys(pubKey: pubKey, privKey: privKey);
       
       setupState.value = MessagingSetupState.ready;

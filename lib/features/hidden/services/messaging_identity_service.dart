@@ -6,6 +6,8 @@ abstract class MessagingIdentityService {
   Future<void> setSetupState(MessagingSetupState state);
   Future<String?> getUsername();
   Future<void> saveUsername(String username);
+  Future<String?> getDisplayName();
+  Future<void> saveDisplayName(String displayName);
   Future<String?> getPublicKey();
   Future<String?> getPrivateKey();
   Future<void> saveIdentityKeys(
@@ -18,6 +20,7 @@ class MessagingIdentityServiceImpl implements MessagingIdentityService {
 
   static const _keySetupState = 'messaging_setup_state';
   static const _keyUsername = 'messaging_my_username';
+  static const _keyDisplayName = 'messaging_my_display_name';
   static const _keyPub = 'messaging_identity_key_pub';
   static const _keyPriv = 'messaging_identity_key_priv';
 
@@ -55,6 +58,16 @@ class MessagingIdentityServiceImpl implements MessagingIdentityService {
   }
 
   @override
+  Future<String?> getDisplayName() async {
+    return await _secureStorage.read(_keyDisplayName);
+  }
+
+  @override
+  Future<void> saveDisplayName(String displayName) async {
+    await _secureStorage.write(_keyDisplayName, displayName);
+  }
+
+  @override
   Future<String?> getPublicKey() async {
     return await _secureStorage.read(_keyPub);
   }
@@ -75,6 +88,7 @@ class MessagingIdentityServiceImpl implements MessagingIdentityService {
   Future<void> resetIdentity() async {
     await _secureStorage.delete(_keySetupState);
     await _secureStorage.delete(_keyUsername);
+    await _secureStorage.delete(_keyDisplayName);
     await _secureStorage.delete(_keyPub);
     await _secureStorage.delete(_keyPriv);
   }
