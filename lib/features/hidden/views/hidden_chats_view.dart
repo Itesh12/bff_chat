@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/features/hidden/controllers/hidden_messaging_controller.dart';
+import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:intl/intl.dart';
 
 class HiddenChatsView extends StatelessWidget {
@@ -56,6 +57,23 @@ class HiddenChatsView extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Obx(() {
+      if (controller.setupState.value != MessagingSetupState.ready) {
+        return AppEmptyState(
+          customIcon: const Text(
+            '🔑',
+            style: TextStyle(fontSize: 40),
+          ),
+          title: 'Secure Identity Required',
+          message: 'Setup a zero-knowledge E2EE identity before configuring E2EE chats.',
+          ctaLabel: 'Setup Messaging',
+          onCtaTap: () async {
+            controller.onUserInteraction();
+            await Get.toNamed(AppRoutes.hiddenMessagingSetup);
+            await controller.refreshSetupState();
+          },
+        );
+      }
+
       if (controller.conversations.isEmpty) {
         return AppEmptyState(
           customIcon: const Text(

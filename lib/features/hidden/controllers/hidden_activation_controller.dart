@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
+import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 
 class HiddenActivationController extends GetxController {
   final HiddenVaultService _vaultService;
@@ -162,6 +163,9 @@ class HiddenActivationController extends GetxController {
 
   Future<void> triggerPanicWipe() async {
     await _vaultService.panicWipe();
+    if (Get.isRegistered<MessagingIdentityService>()) {
+      await Get.find<MessagingIdentityService>().resetIdentity();
+    }
     _sessionService.lockSession();
     clear();
     isSetup.value = false;

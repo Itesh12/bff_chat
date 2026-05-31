@@ -31,6 +31,11 @@ import 'package:memovault/features/hidden/domain/entities/hidden_note_entity.dar
 import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
 import 'package:memovault/core/design_system/design_system.dart';
+import 'package:memovault/domain/messaging/messaging_repository.dart';
+import 'package:memovault/domain/messaging/conversation_entity.dart';
+import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
+import 'package:memovault/features/hidden/services/seed_recovery_service.dart';
+import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 
 // Fake implementations for notes dependencies
 class FakeNotesRepository implements NotesRepository {
@@ -312,6 +317,58 @@ class FakeHiddenCategoriesRepository implements HiddenCategoriesRepository {
   Future<void> reorderCategories(List<String> orderedIds) async {}
 }
 
+class FakeMessagingRepository implements MessagingRepository {
+  @override
+  Stream<List<ConversationEntity>> watchAllConversations({bool isHidden = false}) {
+    return Stream.value([]);
+  }
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class FakeMessagingIdentityService implements MessagingIdentityService {
+  final Rx<MessagingSetupState> state = MessagingSetupState.unconfigured.obs;
+  String? _username;
+  String? _pubKey;
+  String? _privKey;
+
+  @override
+  Future<MessagingSetupState> getSetupState() async => state.value;
+
+  @override
+  Future<void> setSetupState(MessagingSetupState setupState) async {
+    state.value = setupState;
+  }
+
+  @override
+  Future<String?> getUsername() async => _username;
+
+  @override
+  Future<void> saveUsername(String username) async {
+    _username = username;
+  }
+
+  @override
+  Future<String?> getPublicKey() async => _pubKey;
+
+  @override
+  Future<String?> getPrivateKey() async => _privKey;
+
+  @override
+  Future<void> saveIdentityKeys({required String pubKey, required String privKey}) async {
+    _pubKey = pubKey;
+    _privKey = privKey;
+  }
+
+  @override
+  Future<void> resetIdentity() async {
+    state.value = MessagingSetupState.unconfigured;
+    _username = null;
+    _pubKey = null;
+    _privKey = null;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -377,6 +434,11 @@ void main() {
           permanent: true);
       Get.put<HiddenCategoriesRepository>(FakeHiddenCategoriesRepository(),
           permanent: true);
+
+      // Register messaging fakes to prevent HiddenBinding and HiddenHomeScreen failures
+      Get.put<MessagingRepository>(FakeMessagingRepository(), permanent: true);
+      Get.put<MessagingIdentityService>(FakeMessagingIdentityService(), permanent: true);
+      Get.put<SeedRecoveryService>(SeedRecoveryServiceImpl(), permanent: true);
     });
 
     tearDown(() async {

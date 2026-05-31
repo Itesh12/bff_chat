@@ -6,6 +6,7 @@ import 'package:memovault/core/widgets/note_card.dart';
 import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
 import 'package:memovault/features/hidden/controllers/hidden_messaging_controller.dart';
 import 'package:memovault/features/hidden/views/hidden_chats_view.dart';
+import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 
 class HiddenHomeScreen extends GetView<HiddenHomeController> {
   const HiddenHomeScreen({super.key});
@@ -30,69 +31,88 @@ class HiddenHomeScreen extends GetView<HiddenHomeController> {
             },
           ),
           const AppGap.h8(),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded, color: theme.iconTheme.color?.withValues(alpha: 0.8)),
-            onSelected: (value) {
-              controller.onUserInteraction();
-              switch (value) {
-                case 'favorites':
-                  Get.toNamed(AppRoutes.hiddenFavorites);
-                  break;
-                case 'archive':
-                  Get.toNamed(AppRoutes.hiddenArchive);
-                  break;
-                case 'trash':
-                  Get.toNamed(AppRoutes.hiddenTrash);
-                  break;
-                case 'lock':
-                  controller.logout();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'favorites',
-                child: Row(
-                  children: [
-                    Icon(Icons.star_border_rounded, size: 20),
-                    AppGap.h8(),
-                    Text('Favorites'),
-                  ],
+          Obx(() {
+            final messagingController = Get.find<HiddenMessagingController>();
+            final isReady = messagingController.setupState.value == MessagingSetupState.ready;
+            
+            return PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert_rounded, color: theme.iconTheme.color?.withValues(alpha: 0.8)),
+              onSelected: (value) {
+                controller.onUserInteraction();
+                switch (value) {
+                  case 'profile':
+                    Get.toNamed(AppRoutes.hiddenMessagingProfile);
+                    break;
+                  case 'favorites':
+                    Get.toNamed(AppRoutes.hiddenFavorites);
+                    break;
+                  case 'archive':
+                    Get.toNamed(AppRoutes.hiddenArchive);
+                    break;
+                  case 'trash':
+                    Get.toNamed(AppRoutes.hiddenTrash);
+                    break;
+                  case 'lock':
+                    controller.logout();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                if (isReady)
+                  const PopupMenuItem(
+                    value: 'profile',
+                    child: Row(
+                      children: [
+                        Icon(Icons.account_circle_outlined, size: 20),
+                        AppGap.h8(),
+                        Text('Messaging Profile'),
+                      ],
+                    ),
+                  ),
+                const PopupMenuItem(
+                  value: 'favorites',
+                  child: Row(
+                    children: [
+                      Icon(Icons.star_border_rounded, size: 20),
+                      AppGap.h8(),
+                      Text('Favorites'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'archive',
-                child: Row(
-                  children: [
-                    Icon(Icons.archive_outlined, size: 20),
-                    AppGap.h8(),
-                    Text('Archive'),
-                  ],
+                const PopupMenuItem(
+                  value: 'archive',
+                  child: Row(
+                    children: [
+                      Icon(Icons.archive_outlined, size: 20),
+                      AppGap.h8(),
+                      Text('Archive'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'trash',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline_rounded, size: 20),
-                    AppGap.h8(),
-                    Text('Trash'),
-                  ],
+                const PopupMenuItem(
+                  value: 'trash',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline_rounded, size: 20),
+                      AppGap.h8(),
+                      Text('Trash'),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: 'lock',
-                child: Row(
-                  children: [
-                    Icon(Icons.lock_outline_rounded, size: 20, color: Colors.red),
-                    AppGap.h8(),
-                    Text('Lock Vault', style: TextStyle(color: Colors.red)),
-                  ],
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'lock',
+                  child: Row(
+                    children: [
+                      Icon(Icons.lock_outline_rounded, size: 20, color: Colors.red),
+                      AppGap.h8(),
+                      Text('Lock Vault', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            );
+          }),
           const AppGap.h16(),
         ],
         body: Obx(() {
@@ -311,7 +331,7 @@ class HiddenHomeScreen extends GetView<HiddenHomeController> {
           final isChats = controller.selectedSegmentIndex.value == 1;
           if (isChats) {
             final messagingController = Get.find<HiddenMessagingController>();
-            if (messagingController.conversations.isEmpty) {
+            if (messagingController.setupState.value != MessagingSetupState.ready || messagingController.conversations.isEmpty) {
               return const SizedBox.shrink();
             }
             return AppButton.primary(

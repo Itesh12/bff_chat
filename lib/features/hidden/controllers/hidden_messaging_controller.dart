@@ -5,18 +5,23 @@ import 'package:memovault/domain/messaging/conversation_entity.dart';
 import 'package:memovault/domain/messaging/participant_entity.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
+import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
+import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:uuid/uuid.dart';
 
 class HiddenMessagingController extends GetxController {
   final MessagingRepository _messagingRepository;
   final HiddenSessionService _sessionService;
+  final MessagingIdentityService _identityService;
   final _uuid = const Uuid();
 
-  HiddenMessagingController(this._messagingRepository, this._sessionService);
+  HiddenMessagingController(this._messagingRepository, this._sessionService, this._identityService);
 
   final RxList<ConversationEntity> conversations = <ConversationEntity>[].obs;
   final RxMap<String, ParticipantEntity> participants = <String, ParticipantEntity>{}.obs;
   StreamSubscription<List<ConversationEntity>>? _conversationsSubscription;
+  
+  final Rx<MessagingSetupState> setupState = MessagingSetupState.unconfigured.obs;
 
   @override
   void onInit() {
@@ -24,7 +29,13 @@ class HiddenMessagingController extends GetxController {
     _bootstrapMessaging();
   }
 
+  Future<void> refreshSetupState() async {
+    final state = await _identityService.getSetupState();
+    setupState.value = state;
+  }
+
   Future<void> _bootstrapMessaging() async {
+    await refreshSetupState();
     _conversationsSubscription = _messagingRepository
         .watchAllConversations(isHidden: true)
         .listen((data) async {

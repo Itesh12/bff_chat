@@ -10,6 +10,11 @@ import 'package:memovault/features/hidden/domain/repositories/hidden_categories_
 import 'package:memovault/domain/notes/category_entity.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/hidden/views/hidden_home_screen.dart';
+import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
+import 'package:memovault/features/hidden/controllers/hidden_messaging_controller.dart';
+import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
+import 'package:memovault/domain/messaging/messaging_repository.dart';
+import 'package:memovault/domain/messaging/conversation_entity.dart';
 
 class FakeHiddenNotesRepository implements HiddenNotesRepository {
   final List<HiddenNoteEntity> _notes = [];
@@ -234,6 +239,22 @@ class FakeHiddenSessionService extends GetxService with WidgetsBindingObserver i
   void didChangeAppLifecycleState(AppLifecycleState state) {}
 }
 
+class _FakeMessagingRepository implements MessagingRepository {
+  @override
+  Stream<List<ConversationEntity>> watchAllConversations({bool isHidden = false}) {
+    return Stream.value([]);
+  }
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeMessagingIdentityService implements MessagingIdentityService {
+  @override
+  Future<MessagingSetupState> getSetupState() async => MessagingSetupState.unconfigured;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -242,18 +263,27 @@ void main() {
     late FakeHiddenCategoriesRepository fakeCategoriesRepository;
     late FakeHiddenSessionService fakeSessionService;
     late HiddenHomeController controller;
+    late HiddenMessagingController messagingController;
 
     setUp(() {
       fakeRepository = FakeHiddenNotesRepository();
       fakeCategoriesRepository = FakeHiddenCategoriesRepository();
       fakeSessionService = FakeHiddenSessionService();
+      
+      final fakeMessagingRepo = _FakeMessagingRepository();
+      final fakeIdentity = _FakeMessagingIdentityService();
+      
       controller = HiddenHomeController(fakeRepository, fakeCategoriesRepository, fakeSessionService);
       Get.put<HiddenHomeController>(controller);
+      
+      messagingController = HiddenMessagingController(fakeMessagingRepo, fakeSessionService, fakeIdentity);
+      Get.put<HiddenMessagingController>(messagingController);
     });
 
     tearDown(() async {
       fakeRepository.dispose();
       await Get.delete<HiddenHomeController>();
+      await Get.delete<HiddenMessagingController>();
     });
 
     testWidgets('displays AppEmptyState when no notes are present', (tester) async {

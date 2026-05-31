@@ -17,4 +17,6 @@ abstract final class AppRoutes {
   static const String hiddenSearch = '/hidden/search';
   static const String hiddenEditor = '/hidden/editor';
   static const String hiddenChat = '/hidden/chat';
+  static const String hiddenMessagingSetup = '/hidden/messaging/setup';
+  static const String hiddenMessagingProfile = '/hidden/messaging/profile';
 }

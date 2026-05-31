@@ -18,6 +18,8 @@ import 'package:memovault/features/hidden/views/hidden_pin_screen.dart';
 import 'package:memovault/features/hidden/views/hidden_home_screen.dart';
 import 'package:memovault/features/hidden/views/hidden_note_editor_screen.dart';
 import 'package:memovault/features/hidden/views/hidden_chat_screen.dart';
+import 'package:memovault/features/hidden/views/messaging_setup_flow_screens.dart';
+import 'package:memovault/features/hidden/views/messaging_profile_screen.dart';
 
 abstract final class AppPages {
   static final List<GetPage<dynamic>> pages = [
@@ -109,6 +111,18 @@ abstract final class AppPages {
     GetPage(
       name: AppRoutes.hiddenChat,
       page: () => const HiddenChatScreen(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenMessagingSetup,
+      page: () => const MessagingSetupFlowView(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenMessagingProfile,
+      page: () => const MessagingProfileScreen(),
       binding: HiddenBinding(),
       middlewares: [HiddenSessionGuardMiddleware()],
     ),

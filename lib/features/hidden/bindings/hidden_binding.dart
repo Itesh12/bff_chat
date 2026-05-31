@@ -7,6 +7,9 @@ import 'package:memovault/features/hidden/data/repositories/hidden_notes_reposit
 import 'package:memovault/features/hidden/domain/repositories/hidden_notes_repository.dart';
 import 'package:memovault/features/hidden/data/repositories/hidden_categories_repository_impl.dart';
 import 'package:memovault/features/hidden/domain/repositories/hidden_categories_repository.dart';
+import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
+import 'package:memovault/features/hidden/services/seed_recovery_service.dart';
+import 'package:memovault/features/hidden/controllers/messaging_setup_controller.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 
@@ -22,6 +25,15 @@ class HiddenBinding extends Bindings {
     Get.lazyPut<HiddenCategoriesRepository>(
       () => HiddenCategoriesRepositoryImpl(Get.find<HiddenVaultService>().categoriesDao!),
       fenix: true,
+    );
+
+    // Services
+    Get.lazyPut<SeedRecoveryService>(
+      () => SeedRecoveryServiceImpl(),
+    );
+
+    Get.lazyPut<MessagingIdentityService>(
+      () => MessagingIdentityServiceImpl(Get.find()),
     );
 
     // Controllers
@@ -44,6 +56,14 @@ class HiddenBinding extends Bindings {
       () => HiddenMessagingController(
         Get.find<MessagingRepository>(),
         Get.find<HiddenSessionService>(),
+        Get.find<MessagingIdentityService>(),
+      ),
+    );
+
+    Get.lazyPut<MessagingSetupController>(
+      () => MessagingSetupController(
+        Get.find<MessagingIdentityService>(),
+        Get.find<SeedRecoveryService>(),
       ),
     );
   }
