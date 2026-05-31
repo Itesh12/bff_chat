@@ -16,4 +16,5 @@ abstract final class AppRoutes {
   static const String hiddenTrash = '/hidden/trash';
   static const String hiddenFavorites = '/hidden/favorites';
   static const String hiddenSearch = '/hidden/search';
+  static const String hiddenEditor = '/hidden/editor';
 }

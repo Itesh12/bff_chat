@@ -124,6 +124,23 @@ class _WrongKeySimulatorFactory {
   }
 }
 
+class _WrongKeySimulatorFactoryWithCustomException {
+  String? _correctKey;
+  final String exceptionMessage;
+
+  _WrongKeySimulatorFactoryWithCustomException(this.exceptionMessage);
+
+  AppDatabase call(String path, String key) {
+    if (_correctKey == null) {
+      _correctKey = key;
+    } else if (key != _correctKey) {
+      _correctKey = null;
+      throw Exception(exceptionMessage);
+    }
+    return AppDatabase(LazyDatabase(() async => _InMemoryExecutor()));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -292,6 +309,97 @@ void main() {
 
       // Accessing db now must throw StateError
       expect(() => dbService.db, throwsStateError);
+    });
+
+    // ── 8. Open Failure Error Classification ──────────────────────────────────
+    test('classifyOpenError classifies correct signatures as corruptionOrBadKey and others as migrationOrGeneric', () {
+      final factory = _FakeDbFactory();
+      final dbService = DatabaseService(dbFactory: factory.call);
+
+      // Corruption / decryption failures
+      expect(
+        dbService.classifyOpenError(Exception('SQLiteNotADatabaseException: file is not a database')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('hmac check failed for pgno=1')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('error decrypting page')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('wrong key')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('database disk image is malformed')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('SQLITE_NOTADB')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('open_failed')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('net.zetetic.database.sqlcipher')),
+        DatabaseOpenErrorClassification.corruptionOrBadKey,
+      );
+
+      // Migrations / generic SQL errors
+      expect(
+        dbService.classifyOpenError(Exception('syntax error in CREATE TABLE')),
+        DatabaseOpenErrorClassification.migrationOrGeneric,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('no such table: notes')),
+        DatabaseOpenErrorClassification.migrationOrGeneric,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('duplicate column: category_id')),
+        DatabaseOpenErrorClassification.migrationOrGeneric,
+      );
+      expect(
+        dbService.classifyOpenError(Exception('drift migration error')),
+        DatabaseOpenErrorClassification.migrationOrGeneric,
+      );
+    });
+
+    // ── 9. SQLiteNotADatabaseException triggers ADR-011 recovery ────────────────
+    test('SQLiteNotADatabaseException triggers ADR-011 recovery', () async {
+      // Set up a simulator that throws SQLiteNotADatabaseException on the first mismatch
+      final simulator = _WrongKeySimulatorFactoryWithCustomException(
+        'DatabaseException(open_failed) SQLiteNotADatabaseException: file is not a database, hmac check failed'
+      );
+
+      // First launch — generates and stores key.
+      final dbService1 = DatabaseService(dbFactory: simulator.call);
+      await dbService1.init(dbName: 'test_adr011_sqlite_notadb.db');
+      final originalKey = await secureStorage.read('db_encryption_key_v1');
+      expect(originalKey, isNotNull);
+      dbService1.onClose();
+
+      // Tamper: overwrite stored key with an incorrect key so that it fails to decrypt on the next boot
+      final wrongKey = DatabaseService.generate256BitKey();
+      await secureStorage.write('db_encryption_key_v1', wrongKey);
+
+      // Second launch — simulator throws native SQLCipher decryption failure exception.
+      // DatabaseService must classify it as corruptionOrBadKey, wipe the database and the key,
+      // generate a new key, and boot up a fresh database successfully.
+      final dbService2 = DatabaseService(dbFactory: simulator.call);
+      await dbService2.init(dbName: 'test_adr011_sqlite_notadb.db');
+
+      final newKey = await secureStorage.read('db_encryption_key_v1');
+      expect(newKey, isNotNull);
+      expect(newKey, isNot(equals(wrongKey)));
+      expect(newKey, isNot(equals(originalKey)));
+      expect(dbService2.db, isNotNull);
+
+      dbService2.onClose();
     });
   });
 }

@@ -11,6 +11,7 @@ import 'package:memovault/core/design_system/buttons/app_button.dart';
 class AppScaffold extends StatelessWidget {
   final Widget body;
   final String? title;
+  final Widget? leading;
   final List<Widget>? actions;
   final Widget? floatingActionButton;
   final bool isLoading;
@@ -21,6 +22,7 @@ class AppScaffold extends StatelessWidget {
     super.key,
     required this.body,
     this.title,
+    this.leading,
     this.actions,
     this.floatingActionButton,
     this.isLoading = false,
@@ -36,6 +38,7 @@ class AppScaffold extends StatelessWidget {
     Widget? appBarWidget;
     if (title != null) {
       appBarWidget = AppBar(
+        leading: leading,
         title: Text(
           title!,
           style: AppTypography.titleLarge.copyWith(

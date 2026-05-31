@@ -17,10 +17,7 @@ import 'package:memovault/features/hidden/bindings/hidden_binding.dart';
 import 'package:memovault/features/hidden/middleware/hidden_session_guard_middleware.dart';
 import 'package:memovault/features/hidden/views/hidden_pin_screen.dart';
 import 'package:memovault/features/hidden/views/hidden_home_screen.dart';
-import 'package:memovault/features/hidden/views/hidden_archive_screen.dart';
-import 'package:memovault/features/hidden/views/hidden_trash_screen.dart';
-import 'package:memovault/features/hidden/views/hidden_favorites_screen.dart';
-import 'package:memovault/features/hidden/views/hidden_search_screen.dart';
+import 'package:memovault/features/hidden/views/hidden_note_editor_screen.dart';
 
 abstract final class AppPages {
   static final List<GetPage<dynamic>> pages = [
@@ -85,25 +82,31 @@ abstract final class AppPages {
     ),
     GetPage(
       name: AppRoutes.hiddenArchive,
-      page: () => const HiddenArchiveScreen(),
+      page: () => const NotesArchiveScreen(isHiddenMode: true),
       binding: HiddenBinding(),
       middlewares: [HiddenSessionGuardMiddleware()],
     ),
     GetPage(
       name: AppRoutes.hiddenTrash,
-      page: () => const HiddenTrashScreen(),
+      page: () => const NotesTrashScreen(isHiddenMode: true),
       binding: HiddenBinding(),
       middlewares: [HiddenSessionGuardMiddleware()],
     ),
     GetPage(
       name: AppRoutes.hiddenFavorites,
-      page: () => const HiddenFavoritesScreen(),
+      page: () => const NotesFavoritesScreen(isHiddenMode: true),
       binding: HiddenBinding(),
       middlewares: [HiddenSessionGuardMiddleware()],
     ),
     GetPage(
       name: AppRoutes.hiddenSearch,
-      page: () => const HiddenSearchScreen(),
+      page: () => const NotesSearchScreen(isHiddenMode: true),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenEditor,
+      page: () => const HiddenNoteEditorScreen(),
       binding: HiddenBinding(),
       middlewares: [HiddenSessionGuardMiddleware()],
     ),

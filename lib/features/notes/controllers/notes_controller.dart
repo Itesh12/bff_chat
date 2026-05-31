@@ -180,9 +180,9 @@ class NotesController extends GetxController {
       AppLogger.info('note_favorited');
       await refreshStats();
       if (note.isFavorite) {
-        AppSnackBar.info(title: 'Removed', message: 'Removed from favorites.');
+        AppSnackBar.info(title: 'Unfavorited', message: 'Removed from favorites');
       } else {
-        AppSnackBar.success(title: 'Favorited', message: 'Added to favorites.');
+        AppSnackBar.success(title: 'Favorited', message: 'Added to favorites');
       }
     }
   }
@@ -191,19 +191,21 @@ class NotesController extends GetxController {
     await _notesRepository.archiveNote(id);
     AppLogger.info('note_archived');
     await refreshStats();
-    AppSnackBar.success(title: 'Archived', message: 'Note moved to archive.');
+    AppSnackBar.success(title: 'Archived', message: 'Note archived');
   }
 
   Future<void> restoreNote(String id) async {
     await _notesRepository.restoreNote(id);
     AppLogger.info('note_restored');
     await refreshStats();
+    AppSnackBar.success(title: 'Restored', message: 'Note restored');
   }
 
   Future<void> softDeleteNote(String id) async {
     await _notesRepository.softDeleteNote(id);
     AppLogger.info('note_deleted', metadata: {'soft': true});
     await refreshStats();
+    AppSnackBar.success(title: 'Deleted', message: 'Moved to trash');
   }
 
   Future<void> permanentlyDeleteNote(String id) async {

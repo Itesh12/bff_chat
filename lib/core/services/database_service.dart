@@ -139,7 +139,12 @@ class DatabaseService extends GetxService {
       final existingKey = await secureStorage.read(_kDbEncryptionKeyStorageKey);
       storageStopwatch.stop();
       final storageReadMs = storageStopwatch.elapsedMilliseconds;
-      if (storageReadMs > 100) {
+      if (storageReadMs > 1000) {
+        AppLogger.error(
+          '[DatabaseService] Critical: Slow Secure Storage Read',
+          metadata: {'duration_ms': storageReadMs},
+        );
+      } else if (storageReadMs > 500) {
         AppLogger.warning(
           '[DatabaseService] Slow Secure Storage Read',
           metadata: {'duration_ms': storageReadMs},
@@ -252,8 +257,15 @@ class DatabaseService extends GetxService {
 
       return db;
     } catch (e) {
-      final classification = _classifyOpenError(e);
-      if (classification == _ErrorClassification.migrationOrGeneric) {
+      final classification = classifyOpenError(e);
+      AppLogger.fatal(
+        '[DatabaseService] Open failure classification',
+        metadata: {
+          'runtime_type': e.runtimeType.toString(),
+          'classification': classification.name,
+        },
+      );
+      if (classification == DatabaseOpenErrorClassification.migrationOrGeneric) {
         AppLogger.fatal(
           '[DatabaseService] Database open failed due to migration/generic error. NO WIPE performed.',
           metadata: {
@@ -353,32 +365,62 @@ class DatabaseService extends GetxService {
   }
 
   // Error classification helper to prevent wiping on migration failures.
-  _ErrorClassification _classifyOpenError(Object e) {
-    final errStr = e.toString().toLowerCase();
-    
+  @visibleForTesting
+  DatabaseOpenErrorClassification classifyOpenError(Object e) {
+    String errorText = e.toString().toLowerCase();
+    try {
+      // ignore: avoid_dynamic_calls
+      final dynamic msg = (e as dynamic).message;
+      if (msg != null) {
+        errorText += ' ${msg.toString().toLowerCase()}';
+      }
+    } catch (_) {}
+    try {
+      // ignore: avoid_dynamic_calls
+      final dynamic code = (e as dynamic).getResultCode();
+      if (code != null) {
+        errorText += ' ${code.toString().toLowerCase()}';
+      }
+    } catch (_) {}
+
     // Explicitly check for migration signatures to prevent wipes
-    if (errStr.contains('migration') ||
-        errStr.contains('upgrade') ||
-        errStr.contains('createtable') ||
-        errStr.contains('alter table') ||
-        errStr.contains('no such table') ||
-        errStr.contains('no such column')) {
-      return _ErrorClassification.migrationOrGeneric;
+    if (errorText.contains('migration') ||
+        errorText.contains('upgrade') ||
+        errorText.contains('createtable') ||
+        errorText.contains('alter table') ||
+        errorText.contains('no such table') ||
+        errorText.contains('no such column') ||
+        errorText.contains('syntax error') ||
+        errorText.contains('duplicate column') ||
+        errorText.contains('drift migration error')) {
+      return DatabaseOpenErrorClassification.migrationOrGeneric;
     }
 
     // Encryption or corruption signature matches
-    if (errStr.contains('file is not a database') ||
-        errStr.contains('invalid magicheader') ||
-        errStr.contains('corrupt') ||
-        errStr.contains('sqlite_corrupt') ||
-        errStr.contains('sqlite3_key') ||
-        errStr.contains('decryption') ||
+    if (errorText.contains('file is not a database') ||
+        errorText.contains('invalid magicheader') ||
+        errorText.contains('corrupt') ||
+        errorText.contains('sqlite_corrupt') ||
+        errorText.contains('sqlite3_key') ||
+        errorText.contains('decryption') ||
+        errorText.contains('sqlitenotadatabaseexception') ||
+        errorText.contains('hmac check failed') ||
+        errorText.contains('error decrypting page') ||
+        errorText.contains('sqlite_notadb') ||
+        errorText.contains('sqlitenotadb') ||
+        errorText.contains('net.zetetic.database.sqlcipher') ||
+        errorText.contains('open_failed') ||
+        errorText.contains('database disk image is malformed') ||
+        errorText.contains('malformed database schema') ||
+        errorText.contains('unsupported file format') ||
+        errorText.contains('wrong key') ||
+        errorText.contains('cipher_migrate') ||
         e is ArgumentError) { // e.g. key length validation failure
-      return _ErrorClassification.corruptionOrBadKey;
+      return DatabaseOpenErrorClassification.corruptionOrBadKey;
     }
 
     // Default to migration/generic safety (NO WIPE)
-    return _ErrorClassification.migrationOrGeneric;
+    return DatabaseOpenErrorClassification.migrationOrGeneric;
   }
 
   /// Deletes the database file (and companion WAL/SHM files) and removes the
@@ -453,4 +495,4 @@ class DatabaseService extends GetxService {
   }
 }
 
-enum _ErrorClassification { corruptionOrBadKey, migrationOrGeneric }
+enum DatabaseOpenErrorClassification { corruptionOrBadKey, migrationOrGeneric }

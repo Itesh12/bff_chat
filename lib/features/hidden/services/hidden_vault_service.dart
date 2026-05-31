@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
+import 'package:memovault/features/hidden/data/hidden_categories_dao.dart';
 import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 import 'package:memovault/features/hidden/domain/entities/hidden_vault_config.dart';
 import 'package:memovault/features/hidden/services/pin_hashing_service.dart';
@@ -24,9 +25,11 @@ class HiddenVaultService extends GetxService {
 
   HiddenVaultDatabase? _db;
   HiddenNotesDao? _notesDao;
+  HiddenCategoriesDao? _categoriesDao;
 
   HiddenVaultDatabase? get db => _db;
   HiddenNotesDao? get notesDao => _notesDao;
+  HiddenCategoriesDao? get categoriesDao => _categoriesDao;
 
   bool get isVaultInitialized => _db != null;
 
@@ -95,6 +98,7 @@ class HiddenVaultService extends GetxService {
 
     _db = HiddenVaultDatabase(buildHiddenEncryptedExecutor(dbPath, dbKey));
     _notesDao = HiddenNotesDao(_db!);
+    _categoriesDao = HiddenCategoriesDao(_db!);
 
     // Warm up the database to make sure it opens and key is validated
     await _db!.customSelect('SELECT 1').get();
@@ -109,6 +113,7 @@ class HiddenVaultService extends GetxService {
       await _db!.close();
       _db = null;
       _notesDao = null;
+      _categoriesDao = null;
       AppLogger.info('[HiddenVaultService] Hidden vault database closed.');
     }
   }

@@ -5,6 +5,7 @@ import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
 import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
+import 'package:memovault/features/hidden/data/hidden_categories_dao.dart';
 
 class FakeHiddenVaultService extends GetxService implements HiddenVaultService {
   int lockVaultCallCount = 0;
@@ -19,6 +20,9 @@ class FakeHiddenVaultService extends GetxService implements HiddenVaultService {
 
   @override
   HiddenNotesDao? get notesDao => null;
+
+  @override
+  HiddenCategoriesDao? get categoriesDao => null;
 
   @override
   bool get isVaultInitialized => isUnlocked;

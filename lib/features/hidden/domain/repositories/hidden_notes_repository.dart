@@ -14,7 +14,7 @@ abstract class HiddenNotesRepository {
   Future<List<HiddenNoteEntity>> searchNotes(String query);
 
   // --- Mutations ---
-  Future<HiddenNoteEntity> createNote({required String title, required String body});
+  Future<HiddenNoteEntity> createNote({required String title, required String body, String? categoryId});
   Future<HiddenNoteEntity> updateNote(HiddenNoteEntity note);
   Future<void> updateLastOpened(String id);
   Future<void> toggleFavorite(String id);

@@ -2,30 +2,30 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/core/observability/app_logger.dart';
-import 'package:memovault/domain/notes/note_entity.dart';
 import 'package:memovault/domain/notes/category_entity.dart';
 import 'package:memovault/domain/notes/note_metrics.dart';
 import 'package:memovault/core/widgets/note_editor_form.dart';
-import 'package:memovault/features/notes/controllers/notes_controller.dart';
-import 'package:memovault/core/theme/app_durations.dart';
+import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
+import 'package:memovault/features/hidden/domain/entities/hidden_note_entity.dart';
+import 'package:memovault/core/design_system/design_system.dart';
 
-class NoteEditorScreen extends StatefulWidget {
-  const NoteEditorScreen({super.key});
+class HiddenNoteEditorScreen extends StatefulWidget {
+  const HiddenNoteEditorScreen({super.key});
 
   @override
-  State<NoteEditorScreen> createState() => _NoteEditorScreenState();
+  State<HiddenNoteEditorScreen> createState() => _HiddenNoteEditorScreenState();
 }
 
-class _NoteEditorScreenState extends State<NoteEditorScreen> {
-  final NotesController _notesController = Get.find<NotesController>();
+class _HiddenNoteEditorScreenState extends State<HiddenNoteEditorScreen> {
+  final HiddenHomeController _controller = Get.find<HiddenHomeController>();
 
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
 
   String? _noteId;
-  NoteEntity? _existingNote;
+  HiddenNoteEntity? _existingNote;
   String? _selectedCategoryId;
-  
+
   Timer? _debounceTimer;
   bool _isSaving = false;
   int _wordCount = 0;
@@ -33,9 +33,10 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   @override
   void initState() {
     super.initState();
+    _controller.onUserInteraction();
     _noteId = Get.arguments as String?;
     _initializeNote();
-    
+
     _titleController.addListener(_onTextChanged);
     _bodyController.addListener(_onTextChanged);
   }
@@ -50,7 +51,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   void _initializeNote() {
     if (_noteId != null) {
-      final note = _notesController.notes.firstWhereOrNull((n) => n.id == _noteId);
+      final note = _controller.notes.firstWhereOrNull((n) => n.id == _noteId);
       if (note != null) {
         _existingNote = note;
         _titleController.text = note.title;
@@ -62,6 +63,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 
   void _onTextChanged() {
+    _controller.onUserInteraction();
     setState(() {
       _wordCount = NoteMetrics.calculateWordCount(_bodyController.text);
     });
@@ -91,26 +93,33 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
     try {
       if (_existingNote == null) {
-        final newNote = await _notesController.createNote(
-          title: title,
-          body: body,
-          categoryId: _selectedCategoryId,
-        );
-        _existingNote = newNote;
-        _noteId = newNote.id;
-        AppLogger.debug('note_autosaved', metadata: {'note_id': 'REDACTED'});
+        // Create new hidden note
+        final id = _noteId;
+        if (id != null) {
+          // If we had a pre-generated ID or fallback
+        }
+        await _controller.createNote(title, body, categoryId: _selectedCategoryId);
+        // Find the newly created note to associate with _existingNote to avoid duplicate inserts
+        final recentNote = _controller.notes.firstWhereOrNull((n) => n.title == title && n.body == body);
+        if (recentNote != null) {
+          _existingNote = recentNote;
+          _noteId = recentNote.id;
+        }
       } else {
+        // Update existing hidden note
         final updatedNote = _existingNote!.copyWith(
           title: title,
           body: body,
           categoryId: _selectedCategoryId,
         );
-        final result = await _notesController.updateNote(updatedNote);
-        _existingNote = result;
-        AppLogger.debug('note_autosaved', metadata: {'note_id': 'REDACTED'});
+        await _controller.updateNote(updatedNote);
+        final refreshedNote = _controller.notes.firstWhereOrNull((n) => n.id == _existingNote!.id);
+        if (refreshedNote != null) {
+          _existingNote = refreshedNote;
+        }
       }
     } catch (e, stack) {
-      AppLogger.error('Failed to auto-save note', error: e, stackTrace: stack);
+      AppLogger.error('Failed to auto-save secret note', error: e, stackTrace: stack);
     } finally {
       if (mounted) {
         setState(() {
@@ -127,10 +136,33 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _saveNote();
   }
 
+  void _deleteNote() {
+    if (_existingNote != null) {
+      AppDialog.delete(
+        context,
+        title: 'Delete Secret Note',
+        message: 'Are you sure you want to delete this secret note? It will be moved to the vault trash.',
+        deleteLabel: 'Delete',
+        cancelLabel: 'Cancel',
+        onDelete: () async {
+          _debounceTimer?.cancel();
+          await _controller.softDeleteNote(_existingNote!.id);
+          if (mounted) {
+            // We set existing note to null or just pop so it doesn't trigger autosave during pop
+            _existingNote = null;
+            Get.back();
+          }
+        },
+      );
+    }
+  }
+
   Future<bool> _onWillPop() async {
     _debounceTimer?.cancel();
-    await _saveNote();
-    return true; 
+    if (_existingNote != null) {
+      await _saveNote();
+    }
+    return true;
   }
 
   @override
@@ -144,15 +176,16 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       },
       child: Obx(() {
         return NoteEditorForm(
-          title: _existingNote == null ? 'New Note' : 'Edit Note',
+          title: _existingNote == null ? 'New Secret Note' : 'Edit Secret Note',
           titleController: _titleController,
           bodyController: _bodyController,
           wordCount: _wordCount,
           revision: _existingNote?.revision,
           isSaving: _isSaving,
           selectedCategoryId: _selectedCategoryId,
-          categories: _notesController.categories.toList(),
+          categories: _controller.categories.toList(),
           onCategorySelected: _selectCategory,
+          onDelete: _existingNote != null ? _deleteNote : null,
         );
       }),
     );

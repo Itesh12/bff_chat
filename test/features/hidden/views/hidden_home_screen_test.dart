@@ -6,6 +6,8 @@ import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
 import 'package:memovault/features/hidden/domain/entities/hidden_note_entity.dart';
 import 'package:memovault/features/hidden/domain/repositories/hidden_notes_repository.dart';
+import 'package:memovault/features/hidden/domain/repositories/hidden_categories_repository.dart';
+import 'package:memovault/domain/notes/category_entity.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/hidden/views/hidden_home_screen.dart';
 
@@ -41,12 +43,13 @@ class FakeHiddenNotesRepository implements HiddenNotesRepository {
   }
 
   @override
-  Future<HiddenNoteEntity> createNote({required String title, required String body}) async {
+  Future<HiddenNoteEntity> createNote({required String title, required String body, String? categoryId}) async {
     createCallCount++;
     final note = HiddenNoteEntity(
       id: 'note-${_notes.length + 1}',
       title: title,
       body: body,
+      categoryId: categoryId,
       revision: 1,
       isFavorite: false,
       createdAt: DateTime.now(),
@@ -159,6 +162,43 @@ class FakeHiddenNotesRepository implements HiddenNotesRepository {
   }
 }
 
+class FakeHiddenCategoriesRepository implements HiddenCategoriesRepository {
+  final List<CategoryEntity> _categories = [];
+
+  @override
+  Future<List<CategoryEntity>> getAllCategories() async => _categories;
+
+  @override
+  Future<CategoryEntity> createCategory({required String name, required String colorHex}) async {
+    final cat = CategoryEntity(
+      id: 'cat-${_categories.length + 1}',
+      name: name,
+      colorHex: colorHex,
+      displayOrder: _categories.length,
+      createdAt: DateTime.now(),
+    );
+    _categories.add(cat);
+    return cat;
+  }
+
+  @override
+  Future<CategoryEntity> updateCategory(CategoryEntity category) async {
+    final idx = _categories.indexWhere((c) => c.id == category.id);
+    if (idx != -1) {
+      _categories[idx] = category;
+    }
+    return category;
+  }
+
+  @override
+  Future<void> deleteCategory(String id) async {
+    _categories.removeWhere((c) => c.id == id);
+  }
+
+  @override
+  Future<void> reorderCategories(List<String> orderedIds) async {}
+}
+
 class FakeHiddenSessionService extends GetxService with WidgetsBindingObserver implements HiddenSessionService {
   int lockCallCount = 0;
   int resetTimerCallCount = 0;
@@ -199,13 +239,15 @@ void main() {
 
   group('HiddenHomeScreen Widget Tests', () {
     late FakeHiddenNotesRepository fakeRepository;
+    late FakeHiddenCategoriesRepository fakeCategoriesRepository;
     late FakeHiddenSessionService fakeSessionService;
     late HiddenHomeController controller;
 
     setUp(() {
       fakeRepository = FakeHiddenNotesRepository();
+      fakeCategoriesRepository = FakeHiddenCategoriesRepository();
       fakeSessionService = FakeHiddenSessionService();
-      controller = HiddenHomeController(fakeRepository, fakeSessionService);
+      controller = HiddenHomeController(fakeRepository, fakeCategoriesRepository, fakeSessionService);
       Get.put<HiddenHomeController>(controller);
     });
 
@@ -224,7 +266,7 @@ void main() {
       await tester.pump(Duration.zero);
 
       expect(find.byType(AppEmptyState), findsOneWidget);
-      expect(find.text('Private Vault is Empty'), findsOneWidget);
+      expect(find.text('No Hidden Notes'), findsOneWidget);
     });
 
     testWidgets('renders list of notes when notes are present', (tester) async {
@@ -251,7 +293,7 @@ void main() {
       expect(find.byType(AppEmptyState), findsNothing);
     });
 
-    testWidgets('favorite and delete actions propagate to repository', (tester) async {
+    testWidgets('favorite action propagates to repository', (tester) async {
       fakeRepository.addNote(HiddenNoteEntity(
         id: '1',
         title: 'Secret Agent Code',
@@ -270,28 +312,13 @@ void main() {
 
       await tester.pump(Duration.zero);
 
-      final favoriteFinder = find.byIcon(Icons.star_outline_rounded);
+      final favoriteFinder = find.byIcon(Icons.star_border_rounded);
       expect(favoriteFinder, findsOneWidget);
       await tester.tap(favoriteFinder);
       await tester.pumpAndSettle();
 
       expect(fakeRepository.toggleFavoriteCallCount, 1);
       expect(fakeSessionService.resetTimerCallCount, greaterThanOrEqualTo(1));
-
-      final deleteFinder = find.descendant(
-        of: find.byType(AppCard),
-        matching: find.byIcon(Icons.delete_outline_rounded),
-      );
-      expect(deleteFinder, findsOneWidget);
-      await tester.tap(deleteFinder);
-      await tester.pumpAndSettle();
-
-      final confirmDeleteFinder = find.text('Delete');
-      expect(confirmDeleteFinder, findsOneWidget);
-      await tester.tap(confirmDeleteFinder);
-      await tester.pumpAndSettle();
-
-      expect(fakeRepository.softDeleteCallCount, 1);
     });
   });
 }

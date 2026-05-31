@@ -32,6 +32,7 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
       id: row.id,
       title: row.title,
       body: row.body,
+      categoryId: row.categoryId,
       revision: row.revision,
       isFavorite: row.isFavorite,
       isArchived: row.isArchived,
@@ -90,13 +91,14 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
   // ---------------------------------------------------------------------------
 
   @override
-  Future<HiddenNoteEntity> createNote({required String title, required String body}) async {
+  Future<HiddenNoteEntity> createNote({required String title, required String body, String? categoryId}) async {
     final id = _generateUuid();
     final now = DateTime.now().toUtc();
     final companion = HiddenNotesTableCompanion(
       id: Value(id),
       title: Value(title),
       body: Value(body),
+      categoryId: Value(categoryId),
       revision: const Value(1),
       isFavorite: const Value(false),
       isArchived: const Value(false),
@@ -116,6 +118,7 @@ class HiddenNotesRepositoryImpl implements HiddenNotesRepository {
       id: Value(note.id),
       title: Value(note.title),
       body: Value(note.body),
+      categoryId: Value(note.categoryId),
       revision: Value(note.revision + 1),
       isFavorite: Value(note.isFavorite),
       isArchived: Value(note.isArchived),

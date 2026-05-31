@@ -4,26 +4,28 @@ import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/core/storage/sqflite_cipher_executor.dart';
 import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
 import 'package:memovault/features/hidden/data/tables/hidden_notes_table.dart';
+import 'package:memovault/features/hidden/data/tables/hidden_categories_table.dart';
+import 'package:memovault/features/hidden/data/hidden_categories_dao.dart';
 
 part 'hidden_vault_database.g.dart';
 
 @DriftDatabase(
-  tables: [HiddenNotesTable],
-  daos: [HiddenNotesDao],
+  tables: [HiddenNotesTable, HiddenCategoriesTable],
+  daos: [HiddenNotesDao, HiddenCategoriesDao],
 )
 class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   HiddenVaultDatabase(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
-        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v2).');
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v3).');
         await m.createAll();
-        AppLogger.info('[HiddenVaultDatabase] Schema v2 created.');
+        AppLogger.info('[HiddenVaultDatabase] Schema v3 created.');
       },
       onUpgrade: (Migrator m, int from, int to) async {
         AppLogger.info('[HiddenVaultDatabase] Upgrading schema from v$from to v$to.');
@@ -37,6 +39,13 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
           await m.database.customStatement('UPDATE hidden_notes SET is_archived = 0, is_deleted = 0;');
           
           AppLogger.info('[HiddenVaultDatabase] v2 migration: added isArchived, isDeleted, deletedAt.');
+        }
+        if (from < 3) {
+          // v2 → v3: add hidden categories and category reference
+          await m.createTable(hiddenCategoriesTable);
+          await m.addColumn(hiddenNotesTable, hiddenNotesTable.categoryId);
+          
+          AppLogger.info('[HiddenVaultDatabase] v3 migration: added hiddenCategoriesTable and categoryId column.');
         }
       },
     );

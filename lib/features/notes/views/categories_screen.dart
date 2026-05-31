@@ -181,6 +181,17 @@ class CategoriesScreen extends GetView<NotesController> {
 
     return AppScaffold(
       title: 'Manage Categories',
+      actions: [
+        Obx(() {
+          if (controller.categories.isEmpty) return const SizedBox.shrink();
+          return AppButton.primary(
+            text: 'Create',
+            icon: Icons.add,
+            onPressed: () => _showCategoryBottomSheet(context),
+          );
+        }),
+        const AppGap.h16(),
+      ],
       body: Obx(() {
         final list = controller.categories;
         if (list.isEmpty) {
@@ -309,11 +320,6 @@ class CategoriesScreen extends GetView<NotesController> {
           },
         );
       }),
-      floatingActionButton: AppButton.primary(
-        text: 'Category',
-        icon: Icons.add,
-        onPressed: () => _showCategoryBottomSheet(context),
-      ),
     );
   }
 }

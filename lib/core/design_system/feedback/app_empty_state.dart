@@ -7,7 +7,8 @@ import 'package:memovault/core/design_system/buttons/app_button.dart';
 /// A reusable global visual empty state container.
 /// Standardizes vacancies across lists and grids with icons, headlines, and slot configurations.
 class AppEmptyState extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? customIcon;
   final String title;
   final String message;
   final String? ctaLabel;
@@ -15,12 +16,13 @@ class AppEmptyState extends StatelessWidget {
 
   const AppEmptyState({
     super.key,
-    required this.icon,
+    this.icon,
+    this.customIcon,
     required this.title,
     required this.message,
     this.ctaLabel,
     this.onCtaTap,
-  });
+  }) : assert(icon != null || customIcon != null);
 
   @override
   Widget build(BuildContext context) {
@@ -47,8 +49,8 @@ class AppEmptyState extends StatelessWidget {
                 ),
               ),
               child: Center(
-                child: Icon(
-                  icon,
+                child: customIcon ?? Icon(
+                  icon!,
                   size: 40,
                   color: theme.primaryColor.withValues(alpha: 0.6),
                 ),

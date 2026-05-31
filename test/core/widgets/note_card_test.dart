@@ -54,14 +54,14 @@ void main() {
       expect(find.text('Ideas for app'), findsOneWidget);
       expect(find.text('Create a local-first secure notes application with dynamic sorting.'), findsOneWidget);
       expect(find.text('Work'), findsOneWidget);
-      expect(find.byIcon(Icons.star), findsOneWidget); // marked favorite
+      expect(find.byIcon(Icons.star_rounded), findsOneWidget); // marked favorite
 
       // Tap on card
       await tester.tap(find.byType(NoteCard));
       expect(isTapped, isTrue);
 
       // Tap on favorite icon
-      await tester.tap(find.byIcon(Icons.star));
+      await tester.tap(find.byIcon(Icons.star_rounded));
       expect(isFavTapped, isTrue);
     });
 
@@ -82,7 +82,7 @@ void main() {
 
       expect(find.text('Ideas for app'), findsOneWidget);
       expect(find.text('Create a local-first secure notes application with dynamic sorting.'), findsOneWidget);
-      expect(find.byIcon(Icons.star_border), findsOneWidget); // non-favorite
+      expect(find.byIcon(Icons.star_border_rounded), findsOneWidget); // non-favorite
       expect(find.text('Work'), findsNothing); // no category badge
     });
   });

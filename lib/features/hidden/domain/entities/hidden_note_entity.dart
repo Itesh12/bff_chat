@@ -1,7 +1,10 @@
+import 'package:memovault/domain/notes/note_entity.dart';
+
 class HiddenNoteEntity {
   final String id;
   final String title;
   final String body;
+  final String? categoryId;
   final int revision;
   final bool isFavorite;
   final bool isArchived;
@@ -15,6 +18,7 @@ class HiddenNoteEntity {
     required this.id,
     required this.title,
     required this.body,
+    this.categoryId,
     required this.revision,
     required this.isFavorite,
     this.isArchived = false,
@@ -29,6 +33,7 @@ class HiddenNoteEntity {
     String? id,
     String? title,
     String? body,
+    String? categoryId,
     int? revision,
     bool? isFavorite,
     bool? isArchived,
@@ -42,6 +47,7 @@ class HiddenNoteEntity {
       id: id ?? this.id,
       title: title ?? this.title,
       body: body ?? this.body,
+      categoryId: categoryId ?? this.categoryId,
       revision: revision ?? this.revision,
       isFavorite: isFavorite ?? this.isFavorite,
       isArchived: isArchived ?? this.isArchived,
@@ -50,6 +56,21 @@ class HiddenNoteEntity {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
+    );
+  }
+
+  NoteEntity toNoteEntity() {
+    return NoteEntity(
+      id: id,
+      title: title,
+      body: body,
+      categoryId: categoryId,
+      revision: revision,
+      isFavorite: isFavorite,
+      isArchived: isArchived,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      lastOpenedAt: lastOpenedAt,
     );
   }
 }

@@ -2,158 +2,118 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/domain/notes/note_entity.dart';
 import 'package:memovault/domain/notes/notes_repository.dart';
-import 'package:memovault/core/widgets/note_card.dart';
 import 'package:memovault/core/design_system/design_system.dart';
+import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/features/notes/controllers/notes_controller.dart';
+import 'package:memovault/core/widgets/notes_list_layout.dart';
+
+// Hidden Vault imports
+import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
+import 'package:memovault/features/hidden/domain/repositories/hidden_notes_repository.dart';
 
 class NotesArchiveScreen extends StatefulWidget {
-  const NotesArchiveScreen({super.key});
+  final bool isHiddenMode;
+  const NotesArchiveScreen({super.key, this.isHiddenMode = false});
 
   @override
   State<NotesArchiveScreen> createState() => _NotesArchiveScreenState();
 }
 
 class _NotesArchiveScreenState extends State<NotesArchiveScreen> {
-  final NotesController _notesController = Get.find<NotesController>();
-  final NotesRepository _notesRepository = Get.find<NotesRepository>();
-
-  List<NoteEntity> _archivedNotes = [];
+  List<NoteEntity> _notes = [];
   bool _isLoading = false;
+
+  NotesController? get _publicController => widget.isHiddenMode ? null : Get.find<NotesController>();
+  NotesRepository? get _publicRepo => widget.isHiddenMode ? null : Get.find<NotesRepository>();
+
+  HiddenHomeController? get _hiddenController => widget.isHiddenMode ? Get.find<HiddenHomeController>() : null;
+  HiddenNotesRepository? get _hiddenRepo => widget.isHiddenMode ? Get.find<HiddenNotesRepository>() : null;
 
   @override
   void initState() {
     super.initState();
-    _loadArchivedNotes();
+    _loadNotes();
   }
 
-  Future<void> _loadArchivedNotes() async {
+  Future<void> _loadNotes() async {
     setState(() {
       _isLoading = true;
     });
     try {
-      final list = await _notesRepository.getArchivedNotes();
-      setState(() {
-        _archivedNotes = list;
-      });
+      if (widget.isHiddenMode) {
+        final raw = await _hiddenRepo!.getArchivedNotes();
+        _notes = raw.map((e) => e.toNoteEntity()).toList();
+      } else {
+        _notes = await _publicRepo!.getArchivedNotes();
+      }
     } catch (_) {
-      setState(() {
-        _archivedNotes = [];
-      });
+      _notes = [];
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _restoreNote(String id) async {
-    await _notesController.restoreNote(id);
-    await _loadArchivedNotes();
-    AppSnackBar.success(title: 'Restored', message: 'Note returned to your dashboard.');
+    if (widget.isHiddenMode) {
+      await _hiddenController!.restoreNote(id);
+    } else {
+      await _publicController!.restoreNote(id);
+    }
+    await _loadNotes();
   }
 
   Future<void> _deleteNotePermanently(String id) async {
     AppDialog.delete(
       context,
       title: 'Delete Permanently?',
-      message: 'This action is irreversible. The note contents will be permanently purged from the secure database.',
+      message: widget.isHiddenMode
+          ? 'This secret note will be permanently purged from the secure SQLCipher database. This action is irreversible.'
+          : 'This action is irreversible. The note contents will be permanently purged from the secure database.',
       onDelete: () async {
-        await _notesController.permanentlyDeleteNote(id);
-        await _loadArchivedNotes();
-        AppSnackBar.success(title: 'Purged', message: 'Note permanently deleted.');
+        if (widget.isHiddenMode) {
+          await _hiddenController!.permanentlyDeleteNote(id);
+        } else {
+          await _publicController!.permanentlyDeleteNote(id);
+        }
+        await _loadNotes();
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final categories = widget.isHiddenMode
+        ? _hiddenController!.categories.toList()
+        : _publicController!.categories.toList();
 
-    return AppScaffold(
-      title: 'Archive',
-      body: _isLoading
-          ? const Center(child: AppLoading.medium())
-          : _archivedNotes.isEmpty
-              ? const AppEmptyState(
-                  icon: Icons.archive_outlined,
-                  title: 'Archive is Empty',
-                  message: 'Archived notes or soft-deleted items will appear here for secure storage or purging.',
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12, vertical: AppSpacing.s8),
-                  itemCount: _archivedNotes.length,
-                  itemBuilder: (context, index) {
-                    final note = _archivedNotes[index];
-                    final cat = _notesController.categories.firstWhereOrNull((c) => c.id == note.categoryId);
-
-                    return Dismissible(
-                      key: ValueKey(note.id),
-                      background: Container(
-                        color: context.colors.success.withValues(alpha: 0.8),
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24),
-                        child: Icon(Icons.unarchive, color: theme.colorScheme.onPrimary),
-                      ),
-                      secondaryBackground: Container(
-                        color: context.colors.error.withValues(alpha: 0.8),
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s24),
-                        child: Icon(Icons.delete_forever, color: theme.colorScheme.onError),
-                      ),
-                      confirmDismiss: (direction) async {
-                        if (direction == DismissDirection.startToEnd) {
-                          await _restoreNote(note.id);
-                          return true;
-                        } else {
-                          await _deleteNotePermanently(note.id);
-                          return false;
-                        }
-                      },
-                      child: NoteCard(
-                        note: note,
-                        category: cat,
-                        isGrid: false,
-                        onTap: () {
-                          // Allow read-only viewing of archived notes using AppScaffold
-                          Get.to(() => AppScaffold(
-                                title: 'Archived Note',
-                                actions: [
-                                  AppIconButton.secondary(
-                                    icon: Icons.unarchive,
-                                    tooltip: 'Restore Note',
-                                    onPressed: () async {
-                                      await _restoreNote(note.id);
-                                      Get.back();
-                                    },
-                                  ),
-                                  const AppGap.h12(),
-                                ],
-                                body: SingleChildScrollView(
-                                  padding: const EdgeInsets.all(AppSpacing.s24),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        note.title.isEmpty ? 'Untitled' : note.title,
-                                        style: AppTypography.displayLarge.copyWith(fontWeight: FontWeight.bold),
-                                      ),
-                                      const AppGap.v16(),
-                                      Container(height: 1, color: theme.dividerColor),
-                                      const AppGap.v16(),
-                                      Text(
-                                        note.body.isEmpty ? 'No content' : note.body,
-                                        style: AppTypography.bodyLarge.copyWith(height: 1.5),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ));
-                        },
-                        onFavoriteTap: () {}, // Favorite disabled in archive
-                      ),
-                    );
-                  },
-                ),
+    return NotesListLayout(
+      title: widget.isHiddenMode ? 'Secret Archive' : 'Archive',
+      notes: _notes,
+      categories: categories,
+      isLoading: _isLoading,
+      emptyStateIcon: Icons.archive_outlined,
+      emptyStateTitle: 'Archive is Empty',
+      emptyStateMessage: widget.isHiddenMode
+          ? 'Archived secret notes will appear here. They are fully encrypted and securely isolated.'
+          : 'Archived notes or soft-deleted items will appear here for secure storage or purging.',
+      enableSwipes: true,
+      swipeRightIcon: Icons.unarchive,
+      swipeLeftIcon: Icons.delete_forever,
+      onSwipeRight: _restoreNote,
+      onSwipeLeft: _deleteNotePermanently,
+      onUserInteraction: widget.isHiddenMode ? _hiddenController!.onUserInteraction : null,
+      onTapNote: (note) {
+        if (widget.isHiddenMode) {
+          Get.toNamed(AppRoutes.hiddenEditor, arguments: note.id);
+        } else {
+          Get.toNamed('/notes/detail/${note.id}');
+        }
+      },
+      onFavoriteTap: null, // Favorite disabled in archive
     );
   }
 }

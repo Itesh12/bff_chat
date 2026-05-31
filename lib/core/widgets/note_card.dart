@@ -63,21 +63,24 @@ class NoteCard extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: AppTypography.titleMedium.copyWith(
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w700,
+        fontSize: 16,
         color: note.title.isEmpty
-            ? theme.textTheme.titleMedium?.color?.withValues(alpha: 0.4)
+            ? theme.textTheme.titleMedium?.color?.withValues(alpha: 0.35)
             : theme.textTheme.titleMedium?.color,
       ),
     );
 
     final bodyWidget = Text(
       note.body.isEmpty ? 'No content' : note.body,
-      maxLines: isGrid ? 4 : 2,
+      maxLines: 3,
       overflow: TextOverflow.ellipsis,
       style: AppTypography.bodyMedium.copyWith(
+        fontSize: 14,
+        height: 1.4,
         color: note.body.isEmpty
-            ? theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.4)
-            : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+            ? theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.35)
+            : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.65),
       ),
     );
 
@@ -85,13 +88,47 @@ class NoteCard extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: Text(
-            _formatRelativeTime(note.updatedAt),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.bodySmall.copyWith(
-              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
-            ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.access_time_rounded,
+                size: 12,
+                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
+              ),
+              const AppGap.h4(),
+              Text(
+                _formatRelativeTime(note.updatedAt),
+                style: AppTypography.bodySmall.copyWith(
+                  fontSize: 11,
+                  color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+                ),
+              ),
+              if (note.isArchived) ...[
+                const AppGap.h8(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.archive_outlined, size: 10, color: theme.colorScheme.primary),
+                      const AppGap.h4(),
+                      Text(
+                        'Archived',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         const AppGap.h8(),
@@ -108,7 +145,7 @@ class NoteCard extends StatelessWidget {
     return AppCard(
       onTap: onTap,
       margin: const EdgeInsets.symmetric(vertical: AppSpacing.s4, horizontal: AppSpacing.s4),
-      padding: EdgeInsets.zero, // Padding handles internal structure
+      padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
         child: Column(
@@ -119,11 +156,17 @@ class NoteCard extends StatelessWidget {
               children: [
                 Expanded(child: titleWidget),
                 const AppGap.h8(),
-                AppIconButton.primary(
-                  icon: note.isFavorite ? Icons.star : Icons.star_border,
-                  onPressed: onFavoriteTap,
-                  size: 20,
-                  color: note.isFavorite ? context.colors.warning : theme.iconTheme.color?.withValues(alpha: 0.4),
+                GestureDetector(
+                  onTap: onFavoriteTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.s4),
+                    child: Icon(
+                      note.isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+                      size: 20,
+                      color: note.isFavorite ? Colors.amber : theme.iconTheme.color?.withValues(alpha: 0.25),
+                    ),
+                  ),
                 ),
               ],
             ),

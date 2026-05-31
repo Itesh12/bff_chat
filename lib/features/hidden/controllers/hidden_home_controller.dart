@@ -1,18 +1,23 @@
 import 'dart:async';
 import 'package:get/get.dart';
 import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
+import 'package:memovault/domain/notes/category_entity.dart';
 import 'package:memovault/features/hidden/domain/entities/hidden_note_entity.dart';
 import 'package:memovault/features/hidden/domain/repositories/hidden_notes_repository.dart';
+import 'package:memovault/features/hidden/domain/repositories/hidden_categories_repository.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 
 class HiddenHomeController extends GetxController {
   final HiddenNotesRepository _notesRepository;
+  final HiddenCategoriesRepository _categoriesRepository;
   final HiddenSessionService _sessionService;
 
-  HiddenHomeController(this._notesRepository, this._sessionService);
+  HiddenHomeController(this._notesRepository, this._categoriesRepository, this._sessionService);
 
   final RxList<HiddenNoteEntity> notes = <HiddenNoteEntity>[].obs;
+  final RxList<CategoryEntity> categories = <CategoryEntity>[].obs;
   StreamSubscription<List<HiddenNoteEntity>>? _notesSubscription;
+  final Rxn<String> selectedCategoryId = Rxn<String>();
 
   // Reactive Stats
   final RxInt notesCount = 0.obs;
@@ -23,11 +28,16 @@ class HiddenHomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _bootstrapHiddenHomeController();
+  }
+
+  Future<void> _bootstrapHiddenHomeController() async {
+    await refreshCategories();
     _notesSubscription = _notesRepository.watchAllNotes().listen((data) {
       notes.assignAll(data);
       refreshStats();
     });
-    refreshStats();
+    await refreshStats();
   }
 
   @override
@@ -48,9 +58,36 @@ class HiddenHomeController extends GetxController {
     trashedCount.value = await _notesRepository.trashedCount();
   }
 
-  Future<void> createNote(String title, String body) async {
+  Future<void> refreshCategories() async {
+    try {
+      final list = await _categoriesRepository.getAllCategories();
+      categories.assignAll(list);
+    } catch (_) {}
+  }
+
+  Future<CategoryEntity> createCategory({required String name, required String colorHex}) async {
     onUserInteraction();
-    await _notesRepository.createNote(title: title, body: body);
+    final cat = await _categoriesRepository.createCategory(name: name, colorHex: colorHex);
+    await refreshCategories();
+    return cat;
+  }
+
+  Future<void> deleteCategory(String id) async {
+    onUserInteraction();
+    await _categoriesRepository.deleteCategory(id);
+    if (selectedCategoryId.value == id) {
+      await setSelectedCategory(null);
+    }
+    await refreshCategories();
+  }
+
+  Future<void> setSelectedCategory(String? categoryId) async {
+    selectedCategoryId.value = categoryId;
+  }
+
+  Future<void> createNote(String title, String body, {String? categoryId}) async {
+    onUserInteraction();
+    await _notesRepository.createNote(title: title, body: body, categoryId: categoryId);
     await refreshStats();
     AppSnackBar.success(
       title: 'Saved',
@@ -76,13 +113,13 @@ class HiddenHomeController extends GetxController {
       await refreshStats();
       if (note.isFavorite) {
         AppSnackBar.info(
-          title: 'Removed',
-          message: 'Removed from favorites.',
+          title: 'Unfavorited',
+          message: 'Removed from favorites',
         );
       } else {
         AppSnackBar.success(
-          title: 'Added',
-          message: 'Added to favorites.',
+          title: 'Favorited',
+          message: 'Added to favorites',
         );
       }
     }
@@ -94,7 +131,7 @@ class HiddenHomeController extends GetxController {
     await refreshStats();
     AppSnackBar.success(
       title: 'Archived',
-      message: 'Moved to vault archive.',
+      message: 'Note archived',
     );
   }
 
@@ -104,7 +141,7 @@ class HiddenHomeController extends GetxController {
     await refreshStats();
     AppSnackBar.success(
       title: 'Restored',
-      message: 'Restored to vault.',
+      message: 'Note restored',
     );
   }
 
@@ -114,7 +151,7 @@ class HiddenHomeController extends GetxController {
     await refreshStats();
     AppSnackBar.success(
       title: 'Deleted',
-      message: 'Moved to vault trash.',
+      message: 'Moved to trash',
     );
   }
 
@@ -141,6 +178,14 @@ class HiddenHomeController extends GetxController {
   Future<List<HiddenNoteEntity>> searchNotes(String query) async {
     onUserInteraction();
     return _notesRepository.searchNotes(query);
+  }
+
+  List<HiddenNoteEntity> get filteredNotes {
+    final catId = selectedCategoryId.value;
+    if (catId == null) {
+      return notes;
+    }
+    return notes.where((note) => note.categoryId == catId).toList();
   }
 
   void logout() {

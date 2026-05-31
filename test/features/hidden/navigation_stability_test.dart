@@ -26,6 +26,7 @@ import 'package:memovault/features/notes/controllers/notes_search_controller.dar
 import 'package:memovault/features/hidden/controllers/hidden_activation_controller.dart';
 import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
 import 'package:memovault/features/hidden/domain/repositories/hidden_notes_repository.dart';
+import 'package:memovault/features/hidden/domain/repositories/hidden_categories_repository.dart';
 import 'package:memovault/features/hidden/domain/entities/hidden_note_entity.dart';
 import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
@@ -243,11 +244,12 @@ class FakeHiddenNotesRepository implements HiddenNotesRepository {
   Future<HiddenNoteEntity?> getNoteById(String id) async => null;
   @override
   Future<HiddenNoteEntity> createNote(
-      {required String title, required String body}) async {
+      {required String title, required String body, String? categoryId}) async {
     return HiddenNoteEntity(
       id: '1',
       title: title,
       body: body,
+      categoryId: categoryId,
       revision: 1,
       isFavorite: false,
       createdAt: DateTime.now(),
@@ -287,6 +289,27 @@ class FakeHiddenNotesRepository implements HiddenNotesRepository {
   Future<int> archivedCount() async => 0;
   @override
   Future<int> trashedCount() async => 0;
+}
+
+class FakeHiddenCategoriesRepository implements HiddenCategoriesRepository {
+  @override
+  Future<List<CategoryEntity>> getAllCategories() async => [];
+  @override
+  Future<CategoryEntity> createCategory({required String name, required String colorHex}) async {
+    return CategoryEntity(
+      id: 'cat-1',
+      name: name,
+      colorHex: colorHex,
+      displayOrder: 0,
+      createdAt: DateTime.now(),
+    );
+  }
+  @override
+  Future<CategoryEntity> updateCategory(CategoryEntity category) async => category;
+  @override
+  Future<void> deleteCategory(String id) async {}
+  @override
+  Future<void> reorderCategories(List<String> orderedIds) async {}
 }
 
 void main() {
@@ -352,6 +375,8 @@ void main() {
 
       Get.put<HiddenNotesRepository>(FakeHiddenNotesRepository(),
           permanent: true);
+      Get.put<HiddenCategoriesRepository>(FakeHiddenCategoriesRepository(),
+          permanent: true);
     });
 
     tearDown(() async {
@@ -405,11 +430,15 @@ void main() {
       expect(Get.currentRoute, AppRoutes.hiddenHome);
       expect(sessionService.isActive, true);
 
-      // Click manual logout (Lock Vault button)
-      final logoutButton = find.byTooltip('Lock Vault');
-      expect(logoutButton, findsOneWidget);
-      await tester.tap(logoutButton);
-      await tester.pump(const Duration(milliseconds: 500));
+      // Click manual logout (Lock Vault button from PopupMenuButton)
+      final moreButton = find.byIcon(Icons.more_vert_rounded);
+      expect(moreButton, findsOneWidget);
+      await tester.tap(moreButton);
+      await tester.pumpAndSettle();
+
+      final logoutItem = find.text('Lock Vault');
+      expect(logoutItem, findsOneWidget);
+      await tester.tap(logoutItem);
       await tester.pump(const Duration(milliseconds: 500));
 
       // Verifications:
