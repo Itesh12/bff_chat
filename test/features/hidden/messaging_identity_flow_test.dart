@@ -96,8 +96,8 @@ void main() {
       expect(pubKey1 != privKey1, true); // One-way
     });
 
-    test('Username rules filter reserved system handles, enforce length constraints, and normalize case', () async {
-      // 1. Enforce alphanumeric character set regex
+    test('Username rules filter reserved system handles, enforce length constraints, normalize case and Unicode, and protect against homograph attacks', () async {
+      // 1. Enforce alphanumeric character set regex & length
       await controller.checkUsernameUniqueness('sh'); // Too short
       expect(controller.isUsernameAvailable.value, false);
       expect(controller.usernameFeedback.value.contains('3-20 chars'), true);
@@ -117,15 +117,41 @@ void main() {
       await controller.checkUsernameUniqueness('  Shadow_Fox  ');
       expect(controller.isUsernameAvailable.value, true);
       expect(controller.username.value, 'shadow_fox'); // Normalized
+
+      // 4. Unicode Compatibility (NFKC-like mapping) for fullwidth Latin & numbers
+      // Full-width 'ｊｏｈｎ' -> 'john'
+      await controller.checkUsernameUniqueness('ｊｏｈｎ');
+      expect(controller.isUsernameAvailable.value, true);
+      expect(controller.username.value, 'john');
+
+      // 5. Rejection of leading, trailing, and double underscores
+      await controller.checkUsernameUniqueness('__john');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('john__');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('___');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('john__doe');
+      expect(controller.isUsernameAvailable.value, false);
+
+      // 6. Homograph attack prevention (Greek/Cyrillic lookalikes)
+      // Greek Alpha: 'Αlice' (starts with \u0391) -> lowercases to 'αlice' (starts with \u03b1)
+      await controller.checkUsernameUniqueness('\u0391lice');
+      expect(controller.isUsernameAvailable.value, false);
+
+      // Cyrillic A: 'Аlice' (starts with \u0410) -> lowercases to 'аlice' (starts with \u0430)
+      await controller.checkUsernameUniqueness('\u0410lice');
+      expect(controller.isUsernameAvailable.value, false);
     });
 
     test('Onboarding State Machine quiz verification prompt and pre-registration confirmation gates', () async {
       expect(controller.setupState.value, MessagingSetupState.unconfigured);
 
-      // 1. Set username
-      await controller.checkUsernameUniqueness('shadow_fox');
+      // 1. Set username (maintain capitalization for display name)
+      await controller.checkUsernameUniqueness('Shadow_Fox');
       await controller.proceedFromUsernameSelection();
       expect(await identityService.getUsername(), '@shadow_fox');
+      expect(await identityService.getDisplayName(), 'Shadow_Fox');
 
       // 2. Generate recovery seed
       expect(controller.setupState.value, MessagingSetupState.seedGenerated);
@@ -173,10 +199,12 @@ void main() {
     test('Panic PIN wipe triggers fully revoke and scrub secure messaging identity', () async {
       // 1. Setup active identity
       await identityService.saveUsername('@alice');
+      await identityService.saveDisplayName('Alice');
       await identityService.saveIdentityKeys(pubKey: 'pub', privKey: 'priv');
       await identityService.setSetupState(MessagingSetupState.ready);
 
       expect(await identityService.getUsername(), '@alice');
+      expect(await identityService.getDisplayName(), 'Alice');
       expect(await identityService.getPublicKey(), 'pub');
 
       // 2. Simulate Panic Trigger Wipes
@@ -193,6 +221,7 @@ void main() {
 
       // Secure messaging credentials fully scrubbed from storage
       expect(await identityService.getUsername(), isNull);
+      expect(await identityService.getDisplayName(), isNull);
       expect(await identityService.getPublicKey(), isNull);
       expect(await identityService.getSetupState(), MessagingSetupState.unconfigured);
     });

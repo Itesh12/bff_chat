@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pseudonym Directory Rules
+    match /pseudonyms/{username} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null 
+                    && request.resource.data.keys().hasAll([
+                        'username',
+                        'displayName',
+                        'uid',
+                        'identityPublicKey',
+                        'createdAt'
+                    ])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.username == username
+                    && request.resource.data.username is string
+                    && request.resource.data.displayName is string
+                    && request.resource.data.identityPublicKey is string
+                    && username.matches('^(?!_)(?!.*__)[a-z0-9_]{3,20}(?<!_)$')
+                    && !(username in ['admin', 'administrator', 'moderator', 'support', 'system', 'root', 'memovault']);
+      allow update, delete: if false; // Immutable once registered (Option A)
+    }
+
+    // Prekey Bundles Rules
+    match /prekey_bundles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

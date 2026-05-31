@@ -122,7 +122,7 @@ class _SignalSpikeScreenState extends State<SignalSpikeScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Target Cryptographic Stack', style: AppTypography.labelMedium),
+                          const Text('Target Cryptographic Stack', style: AppTypography.labelMedium),
                           const AppGap.v4(),
                           Text(
                             'libsignal_dart (Rust FFI)',

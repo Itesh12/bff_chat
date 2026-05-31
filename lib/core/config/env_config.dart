@@ -3,13 +3,16 @@ import 'package:flutter/widgets.dart';
 enum Environment { dev, staging, prod }
 
 abstract final class EnvConfig {
+  static bool? _isTestOverride;
   static bool get isTest {
+    if (_isTestOverride != null) return _isTestOverride!;
     try {
       return WidgetsBinding.instance.runtimeType.toString().contains('TestWidgets');
     } catch (_) {
       return false;
     }
   }
+  static set isTest(bool value) => _isTestOverride = value;
   static late Environment environment;
   static late String firebaseProjectId;
   static late bool enableDetailedLogging;
