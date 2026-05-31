@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
@@ -11,6 +12,9 @@ class MessagingSetupController extends GetxController {
   final SeedRecoveryService _seedRecoveryService;
 
   MessagingSetupController(this._identityService, this._seedRecoveryService);
+
+  // Persistent text controller for Username input to prevent rebuild keyboard dismiss/cursor reset bugs
+  final usernameController = TextEditingController();
 
   // Reactive step tracker
   final Rx<MessagingSetupState> setupState = MessagingSetupState.unconfigured.obs;
@@ -43,7 +47,9 @@ class MessagingSetupController extends GetxController {
     setupState.value = state;
     final savedUser = await _identityService.getUsername();
     if (savedUser != null) {
-      username.value = savedUser;
+      final cleanName = savedUser.startsWith('@') ? savedUser.substring(1) : savedUser;
+      username.value = cleanName;
+      usernameController.text = cleanName;
     }
   }
 
@@ -260,5 +266,11 @@ class MessagingSetupController extends GetxController {
         message: 'Could not verify seed signature: $e',
       );
     }
+  }
+
+  @override
+  void onClose() {
+    usernameController.dispose();
+    super.onClose();
   }
 }
