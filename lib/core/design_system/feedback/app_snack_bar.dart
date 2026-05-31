@@ -46,13 +46,13 @@ abstract final class AppSnackBar {
     required Color Function(AppColorScheme) getThemeColor,
     required IconData icon,
   }) {
-    final context = Get.context;
-    if (context == null) return;
-
     // Fail-safe check for headless widget/integration test environments
     if (EnvConfig.isTest) {
       return;
     }
+
+    final context = Get.context;
+    if (context == null) return;
 
     final theme = Theme.of(context);
     final colors = theme.extension<AppColorScheme>();

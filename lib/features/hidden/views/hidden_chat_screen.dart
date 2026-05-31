@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/domain/messaging/message_entity.dart';
+import 'package:memovault/domain/messaging/participant_entity.dart';
 import 'package:memovault/features/hidden/controllers/hidden_chat_controller.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
+import 'package:memovault/features/messaging/services/signal_session_manager.dart';
 import 'package:intl/intl.dart';
 
 class HiddenChatScreen extends StatelessWidget {
@@ -157,73 +159,162 @@ class HiddenChatScreen extends StatelessWidget {
                 }),
               ),
 
-              // Chat Input row
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.s16, AppSpacing.s8, AppSpacing.s16, AppSpacing.s16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: theme.cardColor,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: theme.dividerColor.withValues(alpha: 0.15),
+              // Chat Input row / Safety Warning (Obx wrapped)
+              Obx(() {
+                final other = controller.otherParticipant.value;
+                if (other != null && other.trustState == 'revoked') {
+                  return _buildSafetyWarningCard(context, other);
+                }
+
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.s16, AppSpacing.s8, AppSpacing.s16, AppSpacing.s16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: theme.dividerColor.withValues(alpha: 0.15),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const AppGap.h16(),
+                                Expanded(
+                                  child: TextField(
+                                    controller: controller.textController,
+                                    onChanged: (_) => controller.onUserInteraction(),
+                                    style: AppTypography.bodyMedium,
+                                    decoration: const InputDecoration(
+                                      hintText: 'Type secure message...',
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding: EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                    maxLines: 4,
+                                    minLines: 1,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          child: Row(
-                            children: [
-                              const AppGap.h16(),
-                              Expanded(
-                                child: TextField(
-                                  controller: controller.textController,
-                                  onChanged: (_) => controller.onUserInteraction(),
-                                  style: AppTypography.bodyMedium,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Type secure message...',
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  maxLines: 4,
-                                  minLines: 1,
-                                ),
-                              ),
-                            ],
+                        ),
+                        const AppGap.h8(),
+                        GestureDetector(
+                          onTap: controller.sendMessage,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                )
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                           ),
                         ),
-                      ),
-                      const AppGap.h8(),
-                      GestureDetector(
-                        onTap: controller.sendMessage,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              )
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSafetyWarningCard(BuildContext context, ParticipantEntity other) {
+    final theme = Theme.of(context);
+    final controller = Get.find<HiddenChatController>(tag: Get.arguments as String);
+
+    return Container(
+      margin: const EdgeInsets.all(AppSpacing.s16),
+      padding: const EdgeInsets.all(AppSpacing.s16),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppRadius.rLarge),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+              const AppGap.h12(),
+              Expanded(
+                child: Text(
+                  'Safety Number Changed',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
                   ),
                 ),
               ),
             ],
           ),
-        ),
+          const AppGap.v12(),
+          Text(
+            'The identity of ${other.username} has changed.\n\nThis may indicate:\n• New device\n• Reinstall\n• Security risk',
+            style: AppTypography.bodyMedium,
+          ),
+          const AppGap.v12(),
+          Text(
+            'Verify the fingerprint before continuing.',
+            style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const AppGap.v8(),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.s8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(AppRadius.rMedium),
+            ),
+            child: SelectableText(
+              other.identityFingerprint,
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Courier',
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const AppGap.v16(),
+          AppButton.primary(
+            text: 'Verify & Re-approve',
+            onPressed: () async {
+              try {
+                final sessionManager = Get.find<SignalSessionManager>();
+                await sessionManager.reapproveParticipantIdentity(other.id);
+                await controller.bootstrapChat();
+                AppSnackBar.success(
+                  title: 'Identity Verified',
+                  message: 'New identity fingerprint approved successfully.',
+                );
+              } catch (e) {
+                AppSnackBar.error(
+                  title: 'Verification Failed',
+                  message: 'Could not re-approve identity: $e',
+                );
+              }
+            },
+          ),
+        ],
       ),
     );
   }

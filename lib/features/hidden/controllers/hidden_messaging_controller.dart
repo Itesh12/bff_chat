@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:get/get.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
 import 'package:memovault/domain/messaging/conversation_entity.dart';
 import 'package:memovault/domain/messaging/participant_entity.dart';
@@ -7,6 +9,7 @@ import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
+import 'package:memovault/features/messaging/services/signal_session_manager.dart';
 import 'package:uuid/uuid.dart';
 
 class HiddenMessagingController extends GetxController {
@@ -66,47 +69,85 @@ class HiddenMessagingController extends GetxController {
     final cleanUsername = username.trim();
     if (cleanUsername.isEmpty) return;
 
-    final formattedUsername = cleanUsername.startsWith('@') ? cleanUsername : '@$cleanUsername';
+    final canonicalUsername = cleanUsername.replaceAll('@', '').toLowerCase();
+    final formattedUsername = '@$canonicalUsername';
 
     try {
-      // 1. Check if participant exists or create a fake local one for connection exchange
-      var participant = await _messagingRepository.getParticipantByUsername(formattedUsername);
-      if (participant == null) {
-        final pId = 'p_${_uuid.v4()}';
-        participant = await _messagingRepository.createOrUpdateParticipant(
-          id: pId,
-          username: formattedUsername,
-          identityKeyPub: 'pubkey_${_uuid.v4().substring(0, 8)}',
-        );
+      // 1. Check if conversation already exists
+      final existingPart = await _messagingRepository.getParticipantByUsername(formattedUsername);
+      if (existingPart != null) {
+        final currentUid = Firebase.apps.isEmpty ? 'me' : (FirebaseAuth.instance.currentUser?.uid ?? 'me');
+        final conversationId = '${currentUid}_${existingPart.id}';
+        final existing = await _messagingRepository.getConversationById(conversationId);
+        if (existing != null) {
+          AppSnackBar.info(
+            title: 'Thread Exists',
+            message: 'Opening existing conversation with $formattedUsername',
+          );
+          return;
+        }
       }
 
-      // 2. Check if conversation already exists
-      final existing = conversations.firstWhereOrNull((c) => c.participantId == participant!.id);
-      if (existing != null) {
+      // 2. If secure messaging is configured, do real X3DH initiateSession
+      final isSecureReady = await _identityService.getSetupState() == MessagingSetupState.ready;
+      if (isSecureReady) {
+        final sessionManager = Get.find<SignalSessionManager>();
+        
         AppSnackBar.info(
-          title: 'Thread Exists',
-          message: 'Opening existing conversation with $formattedUsername',
+          title: 'Connecting',
+          message: 'Establishing secure E2EE handshake with $formattedUsername...',
         );
-        return;
+        
+        await sessionManager.initiateSession(
+          targetUsername: canonicalUsername,
+          isHidden: true,
+        );
+
+        AppSnackBar.success(
+          title: 'Chat Created',
+          message: 'Secure chat with $formattedUsername initiated.',
+        );
+      } else {
+        // Fallback for offline/local-only mode
+        var participant = await _messagingRepository.getParticipantByUsername(formattedUsername);
+        if (participant == null) {
+          final pId = 'p_${_uuid.v4()}';
+          participant = await _messagingRepository.createOrUpdateParticipant(
+            id: pId,
+            username: formattedUsername,
+            identityKeyPub: 'pubkey_${_uuid.v4().substring(0, 8)}',
+          );
+        }
+
+        final convId = 'c_${_uuid.v4()}';
+        await _messagingRepository.createConversation(
+          id: convId,
+          participantId: participant.id,
+          isHidden: true,
+        );
+
+        AppSnackBar.success(
+          title: 'Chat Created',
+          message: 'Secure chat with $formattedUsername initiated.',
+        );
       }
-
-      // 3. Create private conversation
-      final convId = 'c_${_uuid.v4()}';
-      await _messagingRepository.createConversation(
-        id: convId,
-        participantId: participant.id,
-        isHidden: true,
-      );
-
-      AppSnackBar.success(
-        title: 'Chat Created',
-        message: 'Secure chat with $formattedUsername initiated.',
-      );
     } catch (e) {
-      AppSnackBar.error(
-        title: 'Error',
-        message: 'Could not create conversation: $e',
-      );
+      if (e.toString().contains('IDENTITY_KEY_CHANGED')) {
+        AppSnackBar.error(
+          title: 'Identity Revoked',
+          message: 'Safety number changed for this contact. Verify before continuing.',
+        );
+      } else if (e.toString().contains('BLOCKED_CONTACT')) {
+        AppSnackBar.error(
+          title: 'Blocked Contact',
+          message: 'Cannot initiate session with a blocked contact.',
+        );
+      } else {
+        AppSnackBar.error(
+          title: 'Error',
+          message: 'Could not create conversation: $e',
+        );
+      }
     }
   }
 

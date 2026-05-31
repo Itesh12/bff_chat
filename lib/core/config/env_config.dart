@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 
 enum Environment { dev, staging, prod }
@@ -6,6 +7,7 @@ abstract final class EnvConfig {
   static bool? _isTestOverride;
   static bool get isTest {
     if (_isTestOverride != null) return _isTestOverride!;
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return true;
     try {
       return WidgetsBinding.instance.runtimeType.toString().contains('TestWidgets');
     } catch (_) {

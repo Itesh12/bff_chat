@@ -53,4 +53,5 @@ abstract class MessagingRepository {
   // ─── Sync Metadata ───────────────────────────────────────────────────────
   Future<String?> getSyncMetadata(String key);
   Future<void> setSyncMetadata(String key, String value);
+  Future<void> deleteExpiredHandshakes();
 }
