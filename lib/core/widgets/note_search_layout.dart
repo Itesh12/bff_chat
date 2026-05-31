@@ -79,7 +79,8 @@ class _NoteSearchLayoutState extends State<NoteSearchLayout> {
     Widget content = Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
           child: AppTextField.search(
             controller: _textController,
             focusNode: _focusNode,
@@ -117,14 +118,20 @@ class _NoteSearchLayoutState extends State<NoteSearchLayout> {
                       ? AppEmptyState(
                           icon: Icons.find_in_page_outlined,
                           title: 'No Results Match',
-                          message: 'No notes match the query "${widget.query}". Try searching for different keywords.',
+                          message:
+                              'No notes match the query "${widget.query}". Try searching for different keywords.',
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12, vertical: AppSpacing.s4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.s12,
+                              vertical: AppSpacing.s4),
                           itemCount: widget.results.length,
                           itemBuilder: (context, index) {
                             final note = widget.results[index];
-                            final cat = widget.categories.cast<CategoryEntity?>().firstWhere((c) => c?.id == note.categoryId, orElse: () => null);
+                            final cat = widget.categories
+                                .cast<CategoryEntity?>()
+                                .firstWhere((c) => c?.id == note.categoryId,
+                                    orElse: () => null);
 
                             return NoteCard(
                               key: ValueKey(note.id),
