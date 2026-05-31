@@ -4,7 +4,7 @@ class MessageEntity {
   final String senderId;
   final String encryptedContent;
   final String nonce;
-  final String state; // sending, sent, delivered, read, failed, expired
+  final String state; // pending, sending, sent, delivered, read, failed, expired
   final String messageType; // text, image, video, file, voice, system, handshake
   final bool isDeleted;
   final DateTime? deletedAt;

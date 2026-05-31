@@ -12,6 +12,9 @@ import 'package:memovault/features/hidden/services/seed_recovery_service.dart';
 import 'package:memovault/features/hidden/controllers/messaging_setup_controller.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
+import 'package:memovault/features/messaging/services/signal_session_manager.dart';
+import 'package:memovault/features/messaging/services/signal_sync_service.dart';
+import 'package:memovault/core/services/secure_storage_service.dart';
 
 class HiddenBinding extends Bindings {
   @override
@@ -34,6 +37,25 @@ class HiddenBinding extends Bindings {
 
     Get.lazyPut<MessagingIdentityService>(
       () => MessagingIdentityServiceImpl(Get.find()),
+    );
+
+    Get.lazyPut<SignalSessionManager>(
+      () => SignalSessionManager(
+        Get.find<MessagingIdentityService>(),
+        Get.find<MessagingRepository>(),
+        Get.find<SecureStorageService>(),
+      ),
+      fenix: true,
+    );
+
+    Get.put<SignalSyncService>(
+      SignalSyncService(
+        Get.find<SignalSessionManager>(),
+        Get.find<MessagingIdentityService>(),
+        Get.find<HiddenSessionService>(),
+        Get.find<MessagingRepository>(),
+      ),
+      permanent: true,
     );
 
     // Controllers

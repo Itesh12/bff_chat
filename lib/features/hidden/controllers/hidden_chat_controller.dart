@@ -6,6 +6,9 @@ import 'package:memovault/domain/messaging/message_entity.dart';
 import 'package:memovault/domain/messaging/participant_entity.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
+import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
+import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
+import 'package:memovault/features/messaging/services/signal_session_manager.dart';
 import 'package:uuid/uuid.dart';
 
 class HiddenChatController extends GetxController {
@@ -27,10 +30,10 @@ class HiddenChatController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _bootstrapChat();
+    bootstrapChat();
   }
 
-  Future<void> _bootstrapChat() async {
+  Future<void> bootstrapChat() async {
     try {
       // 1. Fetch conversation details to find participant
       final conv = await _messagingRepository.getConversationById(conversationId);
@@ -43,6 +46,7 @@ class HiddenChatController extends GetxController {
       }
 
       // 2. Watch messages
+      _messagesSubscription?.cancel();
       _messagesSubscription = _messagingRepository
           .watchMessagesForConversation(conversationId)
           .listen((data) {
@@ -90,6 +94,26 @@ class HiddenChatController extends GetxController {
     final text = textController.text.trim();
     if (text.isEmpty) return;
 
+    // Contact Blocking Gate (Point 5)
+    final conv = await _messagingRepository.getConversationById(conversationId);
+    if (conv != null && conv.isBlocked) {
+      AppSnackBar.error(
+        title: 'Blocked Contact',
+        message: 'Cannot send messages to a blocked contact.',
+      );
+      return;
+    }
+
+    // Safety Warning / Trust Revoked Gate (Point 2)
+    final p = otherParticipant.value;
+    if (p != null && p.trustState == 'revoked') {
+      AppSnackBar.error(
+        title: 'Security Warning',
+        message: 'Cannot send messages while the identity trust state is revoked.',
+      );
+      return;
+    }
+
     textController.clear();
 
     final msgId = 'm_${_uuid.v4()}';
@@ -101,7 +125,7 @@ class HiddenChatController extends GetxController {
       senderId: 'me', // Default ID for current local user in offline-first UI
       encryptedContent: text, // Plaintext stored in physical local DB for Phase 4.3 Offline
       nonce: 'nonce_${_uuid.v4().substring(0, 8)}',
-      state: 'sent',
+      state: 'pending',
       createdAt: now,
     );
 
@@ -109,10 +133,26 @@ class HiddenChatController extends GetxController {
       await _messagingRepository.insertMessage(msg);
       await _messagingRepository.updateConversationLastMessage(conversationId, msgId);
       _scrollToBottom();
+
+      final identityService = Get.find<MessagingIdentityService>();
+      final isSecureReady = await identityService.getSetupState() == MessagingSetupState.ready;
+
+      if (isSecureReady && p != null) {
+        final sessionManager = Get.find<SignalSessionManager>();
+        await sessionManager.sendSecureMessage(
+          targetUid: p.id,
+          plaintext: text,
+        );
+        await _messagingRepository.updateMessageState(msgId, 'sent');
+      } else {
+        // Fallback for local-only mock mode
+        await _messagingRepository.updateMessageState(msgId, 'sent');
+      }
     } catch (e) {
+      await _messagingRepository.updateMessageState(msgId, 'failed');
       AppSnackBar.error(
         title: 'Error Sending',
-        message: 'Failed to save E2E message: $e',
+        message: 'Failed to send E2E message: $e',
       );
     }
   }

@@ -14,7 +14,11 @@ class MessagingRepositoryImpl implements MessagingRepository {
   final DatabaseService _databaseService;
   final HiddenVaultService _hiddenVaultService;
 
-  MessagingRepositoryImpl(this._databaseService, this._hiddenVaultService);
+  MessagingRepositoryImpl(this._databaseService, this._hiddenVaultService) {
+    deleteExpiredHandshakes().catchError((e) {
+      // Ignore background cleanup failures on startup
+    });
+  }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -829,5 +833,24 @@ class MessagingRepositoryImpl implements MessagingRepository {
       updatedAt: Value(now),
     );
     await publicDb.into(publicDb.syncMetadataTable).insertOnConflictUpdate(publicCompanion);
+  }
+
+  @override
+  Future<void> deleteExpiredHandshakes() async {
+    final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 7));
+
+    // Purge public db
+    final publicDb = _databaseService.db;
+    await (publicDb.delete(publicDb.messagesTable)
+          ..where((t) => t.messageType.equals('handshake') & t.createdAt.isSmallerThan(Variable(cutoff))))
+        .go();
+
+    // Purge private db if open
+    final privateDb = _hiddenVaultService.db;
+    if (privateDb != null) {
+      await (privateDb.delete(privateDb.messagesTable)
+            ..where((t) => t.messageType.equals('handshake') & t.createdAt.isSmallerThan(Variable(cutoff))))
+          .go();
+    }
   }
 }
