@@ -27,15 +27,15 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   HiddenVaultDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
-        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v4).');
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v5).');
         await m.createAll();
-        AppLogger.info('[HiddenVaultDatabase] Schema v4 created.');
+        AppLogger.info('[HiddenVaultDatabase] Schema v5 created.');
       },
       onUpgrade: (Migrator m, int from, int to) async {
         AppLogger.info('[HiddenVaultDatabase] Upgrading schema from v$from to v$to.');
@@ -67,6 +67,9 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
           await m.createTable(syncMetadataTable);
           
           AppLogger.info('[HiddenVaultDatabase] v4 migration: added secure messaging tables.');
+        } else if (from < 5) {
+          await m.addColumn(participantsTable, participantsTable.trustState);
+          AppLogger.info('[HiddenVaultDatabase] v5 migration: added participantsTable.trustState column.');
         }
       },
     );

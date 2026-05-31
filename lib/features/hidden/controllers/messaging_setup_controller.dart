@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:libsignal/libsignal.dart';
+import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
@@ -236,7 +239,91 @@ class MessagingSetupController extends GetxController {
       final privKey = _seedRecoveryService.derivePrivateKey(mnemonic);
       final pubKey = _seedRecoveryService.derivePublicKey(privKey);
 
-      // 2. Perform Firestore Transaction Registration if Firebase is initialized
+      // Deserialize private key bytes to create PrivateKey object for signing
+      final privKeyBytes = _hexToBytes(privKey);
+      final privateKey = PrivateKey.deserialize(bytes: privKeyBytes);
+
+      // 2. Generate Signed Prekey (Curve25519)
+      const signedPrekeyId = 1;
+      final signedPrekeyPair = PrivateKey.generate();
+      final signedPrekeyPublic = signedPrekeyPair.getPublicKey();
+      final signedPrekeySignature = privateKey.sign(
+        message: signedPrekeyPublic.serialize(),
+      );
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+      // 3. Generate Kyber PQ Prekey
+      const kyberPrekeyId = 1;
+      final kyberKeyPair = KyberKeyPair.generate();
+      final kyberPrekeySignature = privateKey.sign(
+        message: kyberKeyPair.getPublicKey().serialize(),
+      );
+
+      // 4. Generate 100 One-Time Prekeys
+      final secureStorage = Get.find<SecureStorageService>();
+      final oneTimePrekeysData = <Map<String, dynamic>>[];
+      for (int i = 1; i <= 100; i++) {
+        final otKeyPair = PrivateKey.generate();
+        final otPublicKey = otKeyPair.getPublicKey();
+        final otPubKeyHex = _bytesToHex(otPublicKey.serialize());
+        final otPrivKeyHex = _bytesToHex(otKeyPair.serialize());
+
+        // Save locally in identity service
+        await _identityService.saveOneTimePreKey(
+          id: i,
+          privKeyHex: otPrivKeyHex,
+          pubKeyHex: otPubKeyHex,
+        );
+
+        // Serialize and save PreKeyRecord for SignalStoreImpl
+        final otRecord = PreKeyRecord(
+          id: i,
+          publicKey: otPublicKey,
+          privateKey: otKeyPair,
+        );
+        await secureStorage.write('ot_prekey_record_$i', _bytesToHex(otRecord.serialize()));
+
+        oneTimePrekeysData.add({
+          'id': i,
+          'publicKey': otPubKeyHex,
+        });
+      }
+
+      // Save Signed and Kyber prekeys locally
+      await _identityService.saveSignedPreKey(
+        id: signedPrekeyId,
+        privKeyHex: _bytesToHex(signedPrekeyPair.serialize()),
+        pubKeyHex: _bytesToHex(signedPrekeyPublic.serialize()),
+        signatureHex: _bytesToHex(signedPrekeySignature),
+        timestampMs: nowMs,
+      );
+
+      final signedPreKeyRecord = SignedPreKeyRecord(
+        id: signedPrekeyId,
+        timestamp: BigInt.from(nowMs),
+        publicKey: signedPrekeyPublic,
+        privateKey: signedPrekeyPair,
+        signature: signedPrekeySignature,
+      );
+      await secureStorage.write('signed_prekey_record_$signedPrekeyId', _bytesToHex(signedPreKeyRecord.serialize()));
+
+      await _identityService.saveKyberPreKey(
+        id: kyberPrekeyId,
+        privKeyHex: _bytesToHex(kyberKeyPair.getSecretKey().serialize()),
+        pubKeyHex: _bytesToHex(kyberKeyPair.getPublicKey().serialize()),
+        signatureHex: _bytesToHex(kyberPrekeySignature),
+        timestampMs: nowMs,
+      );
+
+      final kyberPreKeyRecord = KyberPreKeyRecord.create(
+        id: kyberPrekeyId,
+        timestamp: BigInt.from(nowMs),
+        keyPair: kyberKeyPair,
+        signature: kyberPrekeySignature,
+      );
+      await secureStorage.write('kyber_prekey_record_$kyberPrekeyId', _bytesToHex(kyberPreKeyRecord.serialize()));
+
+      // 5. Perform Firestore Transaction Registration if Firebase is initialized
       if (Firebase.apps.isNotEmpty) {
         final auth = FirebaseAuth.instance;
         if (auth.currentUser == null) {
@@ -273,7 +360,14 @@ class MessagingSetupController extends GetxController {
           transaction.set(bundleRef, {
             'uid': currentUser.uid,
             'identityPublicKey': pubKey,
-            'createdAt': FieldValue.serverTimestamp(),
+            'signedPrekeyId': signedPrekeyId,
+            'signedPrekeyPublic': _bytesToHex(signedPrekeyPublic.serialize()),
+            'signedPrekeySignature': _bytesToHex(signedPrekeySignature),
+            'kyberPrekeyId': kyberPrekeyId,
+            'kyberPrekeyPublic': _bytesToHex(kyberKeyPair.getPublicKey().serialize()),
+            'kyberPrekeySignature': _bytesToHex(kyberPrekeySignature),
+            'oneTimePrekeys': oneTimePrekeysData,
+            'updatedAt': FieldValue.serverTimestamp(),
           });
         });
       }
@@ -281,10 +375,10 @@ class MessagingSetupController extends GetxController {
       // Plaintext mnemonic is wiped immediately (garbage collector hook)
       seedWords.clear();
 
-      // 3. Persist derived keys only
+      // 6. Persist derived keys only
       await _identityService.saveIdentityKeys(pubKey: pubKey, privKey: privKey);
 
-      // 4. Complete onboarding
+      // 7. Complete onboarding
       setupState.value = MessagingSetupState.ready;
       await _identityService.setSetupState(MessagingSetupState.ready);
 
@@ -363,6 +457,18 @@ class MessagingSetupController extends GetxController {
         message: 'Could not verify seed signature: $e',
       );
     }
+  }
+
+  static Uint8List _hexToBytes(String hex) {
+    final bytes = Uint8List(hex.length ~/ 2);
+    for (var i = 0; i < hex.length; i += 2) {
+      bytes[i ~/ 2] = int.parse(hex.substring(i, i + 2), radix: 16);
+    }
+    return bytes;
+  }
+
+  static String _bytesToHex(List<int> bytes) {
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   @override

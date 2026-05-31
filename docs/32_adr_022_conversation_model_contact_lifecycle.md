@@ -14,6 +14,7 @@ MemoVault is establishing its peer-to-peer end-to-end encrypted (E2EE) messaging
 3. **Message States**: Status tracking for reliable, verified delivery.
 4. **Identity Change Rules**: How the client responds when a user's identity keys change (seed recovery vs new key generation).
 5. **Reverse Lookup Optimization**: Future optimization for identity-based username recovery.
+6. **Handshake Expiration Policy**: Mechanism to prevent stale handshake states and clean up unused Firestore queue resources.
 
 Without a unified architectural agreement on these behaviors, the frontend controllers, local storage layers, and Firestore schemas will diverge, introducing race conditions, data inconsistencies, and security flaws.
 
@@ -81,10 +82,15 @@ When a remote user undergoes onboarding or restoration, their public identity ke
   We will introduce a secondary key-value collection `/identity_registry/{identityPublicKey}` where the document ID is the public key string and the content is the associated username handle.
   This allows O(1) direct document reads (`db.collection('identity_registry').doc(pubKey).get()`) for instant handle recoveries, avoiding search overheads and indexing costs as the user registry scales.
 
+### 6. Handshake Expiration Policy
+- **7-Day TTL**: Handshake messages and unaccepted session states (`handshake_sent` and `handshake_received`) have a strict Time-to-Live (TTL) of **7 days**.
+- **Automated Cleanup**: If the handshake is not accepted within 7 days, the local user's client will flag the handshake state as expired, and the remote user's sync queue payload will be garbage-collected or deleted from Firestore to prevent stale session queues and metadata database clutter.
+
 ---
 
 ## Consequences
 
 - **Secure Trust Bounds**: Clear warning banners prevent Man-in-the-Middle (MitM) attacks if a contact's keys are swapped.
+- **Resource Hygiene**: The 7-day TTL ensures that dead or unresponded handshake attempts do not permanently leak storage resources or clutter client indexes.
 - **Normalized Lifecycle Handling**: DAO and repository states can use a clean enum matching the message and contact lifecycles.
 - **No Race Conditions**: Group chat complexity is entirely avoided, simplifying the Double Ratchet state management.

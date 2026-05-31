@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 
@@ -13,6 +14,37 @@ abstract class MessagingIdentityService {
   Future<void> saveIdentityKeys(
       {required String pubKey, required String privKey});
   Future<void> resetIdentity();
+
+  // Local Prekey persistence
+  Future<void> saveSignedPreKey({
+    required int id,
+    required String privKeyHex,
+    required String pubKeyHex,
+    required String signatureHex,
+    required int timestampMs,
+  });
+  Future<Map<String, dynamic>?> loadSignedPreKey(int id);
+  Future<List<int>> getSignedPreKeyIds();
+
+  Future<void> saveKyberPreKey({
+    required int id,
+    required String privKeyHex,
+    required String pubKeyHex,
+    required String signatureHex,
+    required int timestampMs,
+  });
+  Future<Map<String, dynamic>?> loadKyberPreKey(int id);
+  Future<List<int>> getKyberPreKeyIds();
+
+  Future<void> saveOneTimePreKey({
+    required int id,
+    required String privKeyHex,
+    required String pubKeyHex,
+  });
+  Future<Map<String, dynamic>?> loadOneTimePreKey(int id);
+  Future<bool> containsOneTimePreKey(int id);
+  Future<void> removeOneTimePreKey(int id);
+  Future<List<int>> getOneTimePreKeyIds();
 }
 
 class MessagingIdentityServiceImpl implements MessagingIdentityService {
@@ -23,6 +55,10 @@ class MessagingIdentityServiceImpl implements MessagingIdentityService {
   static const _keyDisplayName = 'messaging_my_display_name';
   static const _keyPub = 'messaging_identity_key_pub';
   static const _keyPriv = 'messaging_identity_key_priv';
+
+  static const _keySignedPreKeyIds = 'messaging_signed_prekey_ids';
+  static const _keyKyberPreKeyIds = 'messaging_kyber_prekey_ids';
+  static const _keyOneTimePreKeyIds = 'messaging_ot_prekey_ids';
 
   MessagingIdentityServiceImpl(this._secureStorage);
 
@@ -91,5 +127,159 @@ class MessagingIdentityServiceImpl implements MessagingIdentityService {
     await _secureStorage.delete(_keyDisplayName);
     await _secureStorage.delete(_keyPub);
     await _secureStorage.delete(_keyPriv);
+
+    // Delete prekeys list
+    final spIds = await getSignedPreKeyIds();
+    for (final id in spIds) {
+      await _secureStorage.delete('messaging_signed_prekey_$id');
+    }
+    await _secureStorage.delete(_keySignedPreKeyIds);
+
+    final kpIds = await getKyberPreKeyIds();
+    for (final id in kpIds) {
+      await _secureStorage.delete('messaging_kyber_prekey_$id');
+    }
+    await _secureStorage.delete(_keyKyberPreKeyIds);
+
+    final otIds = await getOneTimePreKeyIds();
+    for (final id in otIds) {
+      await _secureStorage.delete('messaging_ot_prekey_$id');
+    }
+    await _secureStorage.delete(_keyOneTimePreKeyIds);
+  }
+
+  // ─── Local Prekey persistence implementations ────────────────────────────
+
+  @override
+  Future<void> saveSignedPreKey({
+    required int id,
+    required String privKeyHex,
+    required String pubKeyHex,
+    required String signatureHex,
+    required int timestampMs,
+  }) async {
+    final data = {
+      'id': id,
+      'privKeyHex': privKeyHex,
+      'pubKeyHex': pubKeyHex,
+      'signatureHex': signatureHex,
+      'timestampMs': timestampMs,
+    };
+    await _secureStorage.write('messaging_signed_prekey_$id', jsonEncode(data));
+
+    // Update list of IDs
+    final ids = await getSignedPreKeyIds();
+    if (!ids.contains(id)) {
+      ids.add(id);
+      await _secureStorage.write(_keySignedPreKeyIds, ids.join(','));
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> loadSignedPreKey(int id) async {
+    final val = await _secureStorage.read('messaging_signed_prekey_$id');
+    if (val == null) return null;
+    return jsonDecode(val) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<List<int>> getSignedPreKeyIds() async {
+    final val = await _secureStorage.read(_keySignedPreKeyIds);
+    if (val == null || val.isEmpty) return [];
+    return val.split(',').map(int.parse).toList();
+  }
+
+  @override
+  Future<void> saveKyberPreKey({
+    required int id,
+    required String privKeyHex,
+    required String pubKeyHex,
+    required String signatureHex,
+    required int timestampMs,
+  }) async {
+    final data = {
+      'id': id,
+      'privKeyHex': privKeyHex,
+      'pubKeyHex': pubKeyHex,
+      'signatureHex': signatureHex,
+      'timestampMs': timestampMs,
+    };
+    await _secureStorage.write('messaging_kyber_prekey_$id', jsonEncode(data));
+
+    // Update list of IDs
+    final ids = await getKyberPreKeyIds();
+    if (!ids.contains(id)) {
+      ids.add(id);
+      await _secureStorage.write(_keyKyberPreKeyIds, ids.join(','));
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> loadKyberPreKey(int id) async {
+    final val = await _secureStorage.read('messaging_kyber_prekey_$id');
+    if (val == null) return null;
+    return jsonDecode(val) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<List<int>> getKyberPreKeyIds() async {
+    final val = await _secureStorage.read(_keyKyberPreKeyIds);
+    if (val == null || val.isEmpty) return [];
+    return val.split(',').map(int.parse).toList();
+  }
+
+  @override
+  Future<void> saveOneTimePreKey({
+    required int id,
+    required String privKeyHex,
+    required String pubKeyHex,
+  }) async {
+    final data = {
+      'id': id,
+      'privKeyHex': privKeyHex,
+      'pubKeyHex': pubKeyHex,
+    };
+    await _secureStorage.write('messaging_ot_prekey_$id', jsonEncode(data));
+
+    // Update list of IDs
+    final ids = await getOneTimePreKeyIds();
+    if (!ids.contains(id)) {
+      ids.add(id);
+      await _secureStorage.write(_keyOneTimePreKeyIds, ids.join(','));
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> loadOneTimePreKey(int id) async {
+    final val = await _secureStorage.read('messaging_ot_prekey_$id');
+    if (val == null) return null;
+    return jsonDecode(val) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<bool> containsOneTimePreKey(int id) async {
+    final val = await _secureStorage.read('messaging_ot_prekey_$id');
+    return val != null;
+  }
+
+  @override
+  Future<void> removeOneTimePreKey(int id) async {
+    await _secureStorage.delete('messaging_ot_prekey_$id');
+    final ids = await getOneTimePreKeyIds();
+    if (ids.contains(id)) {
+      ids.remove(id);
+      if (ids.isEmpty) {
+        await _secureStorage.delete(_keyOneTimePreKeyIds);
+      } else {
+        await _secureStorage.write(_keyOneTimePreKeyIds, ids.join(','));
+      }
+    }
+  }
+
+  @override
+  Future<List<int>> getOneTimePreKeyIds() async {
+    final val = await _secureStorage.read(_keyOneTimePreKeyIds);
+    if (val == null || val.isEmpty) return [];
+    return val.split(',').map(int.parse).toList();
   }
 }

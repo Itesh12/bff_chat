@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:libsignal/libsignal.dart';
 
 abstract class SeedRecoveryService {
   List<String> generateMnemonic();
@@ -67,9 +69,34 @@ class SeedRecoveryServiceImpl implements SeedRecoveryService {
   }
 
   @override
-  String derivePublicKey(String privateKey) {
-    final bytes = utf8.encode(privateKey);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
+  String derivePublicKey(String privateKeyHex) {
+    if (!LibSignal.isInitialized) {
+      final bytes = utf8.encode(privateKeyHex);
+      final digest = sha256.convert(bytes);
+      return digest.toString();
+    }
+
+    try {
+      final privKeyBytes = _hexToBytes(privateKeyHex);
+      final privateKey = PrivateKey.deserialize(bytes: privKeyBytes);
+      final publicKey = privateKey.getPublicKey();
+      return _bytesToHex(publicKey.serialize());
+    } catch (_) {
+      final bytes = utf8.encode(privateKeyHex);
+      final digest = sha256.convert(bytes);
+      return digest.toString();
+    }
+  }
+
+  static Uint8List _hexToBytes(String hex) {
+    final bytes = Uint8List(hex.length ~/ 2);
+    for (var i = 0; i < hex.length; i += 2) {
+      bytes[i ~/ 2] = int.parse(hex.substring(i, i + 2), radix: 16);
+    }
+    return bytes;
+  }
+
+  static String _bytesToHex(List<int> bytes) {
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 }

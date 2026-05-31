@@ -8,6 +8,7 @@ class ParticipantsTable extends Table {
   TextColumn get id => text()();
   TextColumn get username => text().unique()();
   TextColumn get identityKeyPub => text()();
+  TextColumn get trustState => text().withDefault(const Constant('unknown'))();
 
   @override
   Set<Column> get primaryKey => {id};

@@ -37,7 +37,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -60,6 +60,8 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(messageReceiptsTable);
           await m.createTable(attachmentsTable);
           await m.createTable(syncMetadataTable);
+        } else if (from < 4) {
+          await m.addColumn(participantsTable, participantsTable.trustState);
         }
         AppLogger.info('[AppDatabase] Migration completed');
       },

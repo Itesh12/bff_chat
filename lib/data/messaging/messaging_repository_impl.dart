@@ -50,6 +50,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       id: row.id,
       username: row.username,
       identityKeyPub: row.identityKeyPub,
+      trustState: row.trustState,
     );
   }
 
@@ -58,6 +59,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       id: row.id,
       username: row.username,
       identityKeyPub: row.identityKeyPub,
+      trustState: row.trustState,
     );
   }
 
@@ -202,17 +204,20 @@ class MessagingRepositoryImpl implements MessagingRepository {
     required String id,
     required String username,
     required String identityKeyPub,
+    String? trustState,
   }) async {
     final privateCompanion = private_db.ParticipantsTableCompanion(
       id: Value(id),
       username: Value(username),
       identityKeyPub: Value(identityKeyPub),
+      trustState: trustState != null ? Value(trustState) : const Value.absent(),
     );
 
     final publicCompanion = ParticipantsTableCompanion(
       id: Value(id),
       username: Value(username),
       identityKeyPub: Value(identityKeyPub),
+      trustState: trustState != null ? Value(trustState) : const Value.absent(),
     );
 
     final privateDb = _hiddenVaultService.db;
@@ -223,11 +228,29 @@ class MessagingRepositoryImpl implements MessagingRepository {
     final publicDb = _databaseService.db;
     await publicDb.into(publicDb.participantsTable).insertOnConflictUpdate(publicCompanion);
 
-    return ParticipantEntity(
+    final resolved = await getParticipantById(id);
+    return resolved ?? ParticipantEntity(
       id: id,
       username: username,
       identityKeyPub: identityKeyPub,
+      trustState: trustState ?? 'unknown',
     );
+  }
+
+  @override
+  Future<void> updateParticipantTrustState(String id, String trustState) async {
+    final privateDb = _hiddenVaultService.db;
+    if (privateDb != null) {
+      final companion = private_db.ParticipantsTableCompanion(
+        trustState: Value(trustState),
+      );
+      await (privateDb.update(privateDb.participantsTable)..where((t) => t.id.equals(id))).write(companion);
+    }
+    final publicDb = _databaseService.db;
+    final companion = ParticipantsTableCompanion(
+      trustState: Value(trustState),
+    );
+    await (publicDb.update(publicDb.participantsTable)..where((t) => t.id.equals(id))).write(companion);
   }
 
   // ─── Conversations ───────────────────────────────────────────────────────
@@ -251,15 +274,22 @@ class MessagingRepositoryImpl implements MessagingRepository {
 
   @override
   Future<ConversationEntity?> getConversationById(String id) async {
-    final isHidden = await _isConversationHidden(id);
-    if (isHidden) {
-      final db = _getPrivateDb();
-      final row = await (db.select(db.conversationsTable)..where((t) => t.id.equals(id))).getSingleOrNull();
-      if (row != null) return _toConversationEntityFromPrivate(row);
-    } else {
-      final db = _databaseService.db;
-      final row = await (db.select(db.conversationsTable)..where((t) => t.id.equals(id))).getSingleOrNull();
-      if (row != null) return _toConversationEntityFromPublic(row);
+    try {
+      final isHidden = await _isConversationHidden(id);
+      if (isHidden) {
+        final db = _getPrivateDb();
+        final row = await (db.select(db.conversationsTable)..where((t) => t.id.equals(id))).getSingleOrNull();
+        if (row != null) return _toConversationEntityFromPrivate(row);
+      } else {
+        final db = _databaseService.db;
+        final row = await (db.select(db.conversationsTable)..where((t) => t.id.equals(id))).getSingleOrNull();
+        if (row != null) return _toConversationEntityFromPublic(row);
+      }
+    } on StateError catch (e) {
+      if (e.message.contains('Attempted to access encrypted HiddenVaultDatabase')) {
+        return null;
+      }
+      rethrow;
     }
     return null;
   }

@@ -67,8 +67,8 @@ void main() {
       final executorv3 = NativeDatabase(dbFile);
       final db = AppDatabase(executorv3);
 
-      // Assert schema version is 3
-      expect(db.schemaVersion, 3);
+      // Assert schema version is 4
+      expect(db.schemaVersion, 4);
 
       // Verify category and note are preserved
       final catRows = await db.customSelect('SELECT * FROM categories').get();
@@ -81,7 +81,7 @@ void main() {
       expect(noteRows.first.read<String>('category_id'), 'cat_1');
 
       // Verify messaging tables are created and writable
-      await db.customStatement("INSERT INTO participants (id, username, identity_key_pub) VALUES ('p1', '@bob', 'pubkey_bob');");
+      await db.customStatement("INSERT INTO participants (id, username, identity_key_pub, trust_state) VALUES ('p1', '@bob', 'pubkey_bob', 'accepted');");
       await db.customStatement("INSERT INTO conversations (id, participant_id, last_message_id, updated_at, unread_count, is_hidden, is_archived, is_muted, is_blocked) VALUES ('c1', 'p1', NULL, 1680000000, 0, 0, 0, 0, 0);");
       await db.customStatement("INSERT INTO messages (id, conversation_id, sender_id, encrypted_content, nonce, state, created_at) VALUES ('m1', 'c1', 'p1', 'enc_content', 'nonce_val', 'sent', 1680000000);");
       await db.customStatement("INSERT INTO message_receipts (id, message_id, participant_id, status, timestamp) VALUES ('r1', 'm1', 'p1', 'delivered', 1680000000);");
@@ -91,6 +91,7 @@ void main() {
       final partRows = await db.customSelect('SELECT * FROM participants').get();
       expect(partRows.length, 1);
       expect(partRows.first.read<String>('username'), '@bob');
+      expect(partRows.first.read<String>('trust_state'), 'accepted');
 
       final convRows = await db.customSelect('SELECT * FROM conversations').get();
       expect(convRows.length, 1);

@@ -159,4 +159,16 @@ void main() {
     expect(decryptedString, equals('Antigravity Secure E2EE Payload!'));
     print('SUCCESS: E2EE crypto operations executed flawlessly without data loss!');
   });
+
+  test('Check KyberKeyPair properties', () {
+    final kp = KyberKeyPair.generate();
+    try {
+      print('KyberKeyPair properties:');
+      print('Public key: ${kp.getPublicKey()}');
+      // Let's check kp.privateKey, kp.private, kp.getPrivateKey() etc.
+      // We can use reflection or try-catch block for compile checks.
+    } catch (e) {
+      print('Error checking KyberKeyPair: $e');
+    }
+  });
 }
