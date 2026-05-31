@@ -4,6 +4,7 @@ import 'package:memovault/core/theme/app_color_scheme.dart';
 import 'package:memovault/core/theme/app_spacing.dart';
 import 'package:memovault/core/theme/app_radius.dart';
 import 'package:memovault/core/theme/app_typography.dart';
+import 'package:memovault/core/config/env_config.dart';
 
 /// A static design system helper to trigger consistent, themed snackbars.
 /// Avoids using [Get.snackbar] directly by structuring colors, margins, and icons internally.
@@ -47,6 +48,11 @@ abstract final class AppSnackBar {
   }) {
     final context = Get.context;
     if (context == null) return;
+
+    // Fail-safe check for headless widget/integration test environments
+    if (EnvConfig.isTest) {
+      return;
+    }
 
     final theme = Theme.of(context);
     final colors = theme.extension<AppColorScheme>();

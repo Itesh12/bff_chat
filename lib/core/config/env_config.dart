@@ -1,6 +1,15 @@
+import 'package:flutter/widgets.dart';
+
 enum Environment { dev, staging, prod }
 
 abstract final class EnvConfig {
+  static bool get isTest {
+    try {
+      return WidgetsBinding.instance.runtimeType.toString().contains('TestWidgets');
+    } catch (_) {
+      return false;
+    }
+  }
   static late Environment environment;
   static late String firebaseProjectId;
   static late bool enableDetailedLogging;

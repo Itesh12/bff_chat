@@ -111,8 +111,6 @@ class MessagingSetupFlowView extends GetView<MessagingSetupController> {
 
   // ─── 2. Username Selection Screen ─────────────────────────────────────────
   Widget _buildUsernameScreen(BuildContext context, ThemeData theme) {
-    final textController = TextEditingController(text: controller.username.value);
-
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -130,7 +128,7 @@ class MessagingSetupFlowView extends GetView<MessagingSetupController> {
         ),
         const AppGap.v24(),
         AppTextField(
-          controller: textController,
+          controller: controller.usernameController,
           labelText: 'Choose Username',
           hintText: 'e.g. shadow_fox',
           prefix: const Icon(Icons.alternate_email_rounded, size: 20),
