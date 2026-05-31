@@ -1,6 +1,5 @@
 /// Route name constants for MemoVault.
 abstract final class AppRoutes {
-  static const String home = '/home';
   static const String themeSandbox = '/theme-sandbox';
   static const String notes = '/notes';
   static const String noteEditor = '/notes/editor';

@@ -724,3 +724,69 @@ The MemoVault application requires a covert hidden vault feature that contains e
 - Multi-layered security: A compromised public database (`app.db`) exposes zero hidden vault data, as they are encrypted under completely separate keys.
 - Structured schema design: Reserving tables for messaging, media, attachments, and contacts guarantees that future phases can implement these features on top of a single database schema without migrations or schema collisions.
 
+
+---
+
+## ADR-018 — Shared Presentation Rule
+
+**Status:** Accepted
+
+**Date:** 2026-05-31
+
+**Context:**
+As MemoVault expanded to include a secure Hidden Vault, we observed visual and behavior drift between the public and hidden views (such as separate archive lists, editor bottom sheets, and search screens). To maintain design consistency and reduce maintenance overhead, we must enforce a strict rule for visual reuse between public and private modules without compromising database/cryptographic isolation boundaries.
+
+**Decision:**
+1. **Shared Layout Primitives**:
+   - Any screen layout, card representation, search layout, editor form, or empty state template that exists in both public and private vaults must be implemented as a single, reusable presentation component (e.g., `NotesListLayout`, `NoteSearchLayout`, `NoteEditorForm`, `NoteCard`).
+   - The presentation component must not bind directly to specific GetX controllers or database implementations. Instead, it must accept raw configuration parameters, list items, and callback closures.
+2. **Conditional Screen Binding**:
+   - Route targets (such as `/notes/archive` and `/hidden/archive`) must bind to the same view class (e.g., `NotesArchiveScreen`) configured with a runtime flag (`isHiddenMode: true` or `isHiddenMode: false`).
+   - Based on this flag, the screen wrapper resolves and delegates state operations to either the public controller/repository or the secure private controller/repository.
+
+**Consequences:**
+- Eliminates UX drift: Changes to font styles, spacing tokens, or access badges automatically manifest in both public and hidden lists.
+- Ensures a strict cropped-screenshot visual uniformity where public and hidden screens are indistinguishable if headers are cropped.
+
+---
+
+## ADR-019 — Shared Domain, Separate Data Sources
+
+**Status:** Accepted
+
+**Date:** 2026-05-31
+
+**Context:**
+To prepare the MemoVault platform for future expansion (Messaging, Media Vault, Secret Attachments, Status/Moments) while strictly adhering to ADR-017 (Hidden Vault Isolation) and ADR-018 (Shared Presentation), we must establish a clear structural boundary rule. This guarantees that future developers will not build duplicate presentation screens or mix secure data paths.
+
+**Decision:**
+The architectural blueprint for any feature operating in both public and hidden spaces must follow a strict layering hierarchy:
+
+```text
+       [ Shared Presentation Layer ] (e.g., MessagesScreen(isHiddenMode))
+                     │
+                     ▼
+       [ Shared or Separated Controllers ] (e.g., MessagesController)
+                     │
+                     ▼
+  ┌──────────────────┴──────────────────┐
+  ▼                                     ▼
+[ Public Repository ]            [ Hidden Repository ] (Returns same Domain Model)
+  │                                     │
+  ▼                                     ▼
+[ app.db ] (SQLite)              [ hidden_vault.db ] (SQLCipher Encrypted)
+  │                                     │
+  ▼                                     ▼
+[ Public Key ]                   [ Stretched PIN Key ]
+```
+
+1. **Presentation Layer**: Always shared. Features must use a single view with an `isHiddenMode` flag (e.g., `MessagesScreen(isHiddenMode)`).
+2. **Controllers**: Shared where session state permits, or separated if session lockout/inactivity timeout demands distinct lifecycle handlers.
+3. **Repositories**: Strictly separated (e.g., `MessagesRepository` vs `HiddenMessagesRepository`). Both repositories must map local schema entities to the identical domain model.
+4. **Databases**: Separated physically (unencrypted `app.db` vs encrypted `hidden_vault.db`).
+5. **Encryption Keys**: Separated cryptographically (`db_encryption_key_v1` vs user-derived PIN `hidden_vault_encryption_key_v1`).
+
+**Consequences:**
+- Prevents technical debt: Future features cannot introduce duplicate UI layouts like `HiddenMessageScreen` or `HiddenMediaScreen`.
+- Code reuse: Domain models and serialization logic are shared, significantly accelerating the development of future modules.
+- Strict security: Keeps data streams logically and physically separated down to the disk storage and encryption keys.
