@@ -12,7 +12,9 @@ abstract class MessagingRepository {
     required String id,
     required String username,
     required String identityKeyPub,
+    String? trustState,
   });
+  Future<void> updateParticipantTrustState(String id, String trustState);
 
   // ─── Conversations ───────────────────────────────────────────────────────
   Stream<List<ConversationEntity>> watchAllConversations({bool isHidden = false});

@@ -377,6 +377,31 @@ class FakeMessagingIdentityService implements MessagingIdentityService {
     _pubKey = null;
     _privKey = null;
   }
+
+  @override
+  Future<void> saveSignedPreKey({required int id, required String privKeyHex, required String pubKeyHex, required String signatureHex, required int timestampMs}) async {}
+  @override
+  Future<Map<String, dynamic>?> loadSignedPreKey(int id) async => null;
+  @override
+  Future<List<int>> getSignedPreKeyIds() async => [];
+
+  @override
+  Future<void> saveKyberPreKey({required int id, required String privKeyHex, required String pubKeyHex, required String signatureHex, required int timestampMs}) async {}
+  @override
+  Future<Map<String, dynamic>?> loadKyberPreKey(int id) async => null;
+  @override
+  Future<List<int>> getKyberPreKeyIds() async => [];
+
+  @override
+  Future<void> saveOneTimePreKey({required int id, required String privKeyHex, required String pubKeyHex}) async {}
+  @override
+  Future<Map<String, dynamic>?> loadOneTimePreKey(int id) async => null;
+  @override
+  Future<bool> containsOneTimePreKey(int id) async => false;
+  @override
+  Future<void> removeOneTimePreKey(int id) async {}
+  @override
+  Future<List<int>> getOneTimePreKeyIds() async => [];
 }
 
 void main() {

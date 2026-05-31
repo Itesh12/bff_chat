@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:libsignal/libsignal.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
@@ -66,12 +67,21 @@ void main() {
     late SeedRecoveryService seedRecoveryService;
     late MessagingSetupController controller;
 
+    setUpAll(() async {
+      await LibSignal.init();
+    });
+
     setUp(() {
       fakeStorage = _FakeSecureStorageService();
+      Get.put<SecureStorageService>(fakeStorage);
       identityService = MessagingIdentityServiceImpl(fakeStorage);
       seedRecoveryService = SeedRecoveryServiceImpl();
       controller = MessagingSetupController(identityService, seedRecoveryService);
       controller.onInit();
+    });
+
+    tearDown(() {
+      Get.delete<SecureStorageService>();
     });
 
     test('BIP-39 Mnemonic Seed generation derives exactly 12 valid words', () {
@@ -124,7 +134,17 @@ void main() {
       expect(controller.isUsernameAvailable.value, true);
       expect(controller.username.value, 'john');
 
-      // 5. Rejection of leading, trailing, and double underscores
+      // 5. Rejection of leading, trailing, and double underscores, and starting with a digit
+      await controller.checkUsernameUniqueness('1john');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('123abc');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('a_');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('ab_');
+      expect(controller.isUsernameAvailable.value, false);
+      await controller.checkUsernameUniqueness('john_');
+      expect(controller.isUsernameAvailable.value, false);
       await controller.checkUsernameUniqueness('__john');
       expect(controller.isUsernameAvailable.value, false);
       await controller.checkUsernameUniqueness('john__');
@@ -194,6 +214,56 @@ void main() {
       // Derived keys persisted securely
       expect(await identityService.getPublicKey(), isNotNull);
       expect(await identityService.getPrivateKey(), isNotNull);
+    });
+
+    test('Local prekey storage persists signed, Kyber, and one-time prekeys correctly and is purged on reset', () async {
+      // Test Signed Prekeys
+      await identityService.saveSignedPreKey(
+        id: 101,
+        privKeyHex: 'priv_sp_101',
+        pubKeyHex: 'pub_sp_101',
+        signatureHex: 'sig_sp_101',
+        timestampMs: 123456789,
+      );
+      final sp = await identityService.loadSignedPreKey(101);
+      expect(sp, isNotNull);
+      expect(sp!['privKeyHex'], 'priv_sp_101');
+      expect(sp['timestampMs'], 123456789);
+      expect(await identityService.getSignedPreKeyIds(), [101]);
+
+      // Test Kyber Prekeys
+      await identityService.saveKyberPreKey(
+        id: 301,
+        privKeyHex: 'priv_kp_301',
+        pubKeyHex: 'pub_kp_301',
+        signatureHex: 'sig_kp_301',
+        timestampMs: 987654321,
+      );
+      final kp = await identityService.loadKyberPreKey(301);
+      expect(kp, isNotNull);
+      expect(kp!['pubKeyHex'], 'pub_kp_301');
+      expect(await identityService.getKyberPreKeyIds(), [301]);
+
+      // Test One-Time Prekeys
+      await identityService.saveOneTimePreKey(id: 1, privKeyHex: 'priv_ot_1', pubKeyHex: 'pub_ot_1');
+      await identityService.saveOneTimePreKey(id: 2, privKeyHex: 'priv_ot_2', pubKeyHex: 'pub_ot_2');
+      expect(await identityService.containsOneTimePreKey(1), true);
+      expect(await identityService.containsOneTimePreKey(3), false);
+      expect(await identityService.getOneTimePreKeyIds(), [1, 2]);
+
+      final ot1 = await identityService.loadOneTimePreKey(1);
+      expect(ot1!['privKeyHex'], 'priv_ot_1');
+
+      await identityService.removeOneTimePreKey(1);
+      expect(await identityService.containsOneTimePreKey(1), false);
+      expect(await identityService.getOneTimePreKeyIds(), [2]);
+
+      // Reset Identity cleans all prekeys
+      await identityService.resetIdentity();
+      expect(await identityService.getSignedPreKeyIds(), isEmpty);
+      expect(await identityService.getKyberPreKeyIds(), isEmpty);
+      expect(await identityService.getOneTimePreKeyIds(), isEmpty);
+      expect(await identityService.loadSignedPreKey(101), isNull);
     });
 
     test('Panic PIN wipe triggers fully revoke and scrub secure messaging identity', () async {

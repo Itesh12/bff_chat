@@ -17,7 +17,7 @@ service cloud.firestore {
                     && request.resource.data.username is string
                     && request.resource.data.displayName is string
                     && request.resource.data.identityPublicKey is string
-                    && username.matches('^(?!_)(?!.*__)[a-z0-9_]{3,20}(?<!_)$')
+                    && username.matches('^[a-z](?!.*__)[a-z0-9_]{2,19}(?<!_)$')
                     && !(username in ['admin', 'administrator', 'moderator', 'support', 'system', 'root', 'memovault']);
       allow update, delete: if false; // Immutable once registered (Option A)
     }
@@ -26,6 +26,12 @@ service cloud.firestore {
     match /prekey_bundles/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Sync Queues Rules
+    match /sync_queues/{userId}/messages/{messageId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
     }
   }
 }
