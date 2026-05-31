@@ -5,6 +5,7 @@ import 'package:memovault/core/storage/sqflite_cipher_executor.dart';
 import 'package:memovault/core/storage/tables/app_metadata_table.dart';
 import 'package:memovault/core/storage/tables/categories_table.dart';
 import 'package:memovault/core/storage/tables/notes_table.dart';
+import 'package:memovault/core/storage/tables/messaging_tables.dart';
 import 'package:memovault/data/notes/notes_dao.dart';
 import 'package:memovault/data/notes/categories_dao.dart';
 
@@ -19,14 +20,24 @@ part 'app_database.g.dart';
 ///
 /// Schema version history must be documented and migrated here.
 @DriftDatabase(
-  tables: [AppMetadata, CategoriesTable, NotesTable],
+  tables: [
+    AppMetadata,
+    CategoriesTable,
+    NotesTable,
+    ParticipantsTable,
+    ConversationsTable,
+    MessagesTable,
+    MessageReceiptsTable,
+    AttachmentsTable,
+    SyncMetadataTable,
+  ],
   daos: [NotesDao, CategoriesDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
@@ -41,6 +52,14 @@ class AppDatabase extends _$AppDatabase {
         if (from < 2) {
           await m.createTable(categoriesTable);
           await m.createTable(notesTable);
+        }
+        if (from < 3) {
+          await m.createTable(participantsTable);
+          await m.createTable(conversationsTable);
+          await m.createTable(messagesTable);
+          await m.createTable(messageReceiptsTable);
+          await m.createTable(attachmentsTable);
+          await m.createTable(syncMetadataTable);
         }
         AppLogger.info('[AppDatabase] Migration completed');
       },

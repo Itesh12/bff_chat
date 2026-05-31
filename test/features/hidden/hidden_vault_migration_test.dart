@@ -6,7 +6,7 @@ import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 
 void main() {
   group('HiddenVaultDatabase Schema Migration Tests', () {
-    test('upgrades from v1 to v3 successfully and preserves data', () async {
+    test('upgrades from v1 to v4 successfully and preserves data', () async {
       // Create a temporary file for the test database
       final tempDir = Directory.systemTemp.createTempSync('memo_migration_test');
       final dbFile = File('${tempDir.path}/test_hidden_vault.db');
@@ -46,11 +46,11 @@ void main() {
       await executorv1.close();
 
       // 2. Open the database using our actual Drift class HiddenVaultDatabase
-      final executorv3 = NativeDatabase(dbFile);
-      final db = HiddenVaultDatabase(executorv3);
+      final executorv4 = NativeDatabase(dbFile);
+      final db = HiddenVaultDatabase(executorv4);
 
-      // 3. Assert schema version is 3
-      expect(db.schemaVersion, 3);
+      // 3. Assert schema version is 4
+      expect(db.schemaVersion, 4);
 
       // 5. Query all notes and verify they exist and have correct values
       final notes = await db.hiddenNotesDao.watchAllNotes().first;
@@ -79,9 +79,9 @@ void main() {
       await db.close();
     });
 
-    test('upgrades from v2 to v3 successfully, creates hidden_categories table and categoryId column', () async {
+    test('upgrades from v2 to v4 successfully, creates hidden_categories and messaging tables', () async {
       // Create a temporary file for the test database
-      final tempDir = Directory.systemTemp.createTempSync('memo_migration_v3_test');
+      final tempDir = Directory.systemTemp.createTempSync('memo_migration_v4_test');
       final dbFile = File('${tempDir.path}/test_hidden_vault.db');
 
       // 1. Setup v2 schema and data using raw SQL on executor
@@ -118,11 +118,11 @@ void main() {
       await executorv2.close();
 
       // 2. Open using Drift class
-      final executorv3 = NativeDatabase(dbFile);
-      final db = HiddenVaultDatabase(executorv3);
+      final executorv4 = NativeDatabase(dbFile);
+      final db = HiddenVaultDatabase(executorv4);
 
-      // Assert schema version is 3
-      expect(db.schemaVersion, 3);
+      // Assert schema version is 4
+      expect(db.schemaVersion, 4);
 
       // Verify categories table is created and writable
       await db.customStatement("INSERT INTO hidden_categories (id, name, color_hex, display_order, created_at) VALUES ('cat_1', 'Work', 'FF0000', 0, 1680000000);");
@@ -140,6 +140,38 @@ void main() {
 
       final note2 = noteRows.firstWhere((r) => r.read<String>('id') == '2');
       expect(note2.read<String?>('category_id'), isNull);
+
+      // Verify messaging tables are created and writable
+      await db.customStatement("INSERT INTO participants (id, username, identity_key_pub) VALUES ('p1', '@alice', 'pubkey_alice');");
+      await db.customStatement("INSERT INTO conversations (id, participant_id, last_message_id, updated_at, unread_count, is_hidden, is_archived, is_muted, is_blocked) VALUES ('c1', 'p1', NULL, 1680000000, 0, 1, 0, 0, 0);");
+      await db.customStatement("INSERT INTO messages (id, conversation_id, sender_id, encrypted_content, nonce, state, created_at) VALUES ('m1', 'c1', 'p1', 'enc_data', 'nonce_val', 'sent', 1680000000);");
+      await db.customStatement("INSERT INTO message_receipts (id, message_id, participant_id, status, timestamp) VALUES ('r1', 'm1', 'p1', 'read', 1680000000);");
+      await db.customStatement("INSERT INTO attachments (id, message_id, encrypted_remote_url, key_payload, local_cache_path, size_bytes, state) VALUES ('a1', 'm1', 'url', 'key', '/cache', 1024, 'completed');");
+      await db.customStatement("INSERT INTO sync_metadata (key, value, updated_at) VALUES ('last_sync', '1680000000', 1680000000);");
+
+      final partRows = await db.customSelect('SELECT * FROM participants').get();
+      expect(partRows.length, 1);
+      expect(partRows.first.read<String>('username'), '@alice');
+
+      final convRows = await db.customSelect('SELECT * FROM conversations').get();
+      expect(convRows.length, 1);
+      expect(convRows.first.read<String>('participant_id'), 'p1');
+
+      final msgRows = await db.customSelect('SELECT * FROM messages').get();
+      expect(msgRows.length, 1);
+      expect(msgRows.first.read<String>('encrypted_content'), 'enc_data');
+
+      final receiptRows = await db.customSelect('SELECT * FROM message_receipts').get();
+      expect(receiptRows.length, 1);
+      expect(receiptRows.first.read<String>('status'), 'read');
+
+      final attachRows = await db.customSelect('SELECT * FROM attachments').get();
+      expect(attachRows.length, 1);
+      expect(attachRows.first.read<String>('encrypted_remote_url'), 'url');
+
+      final metaRows = await db.customSelect('SELECT * FROM sync_metadata').get();
+      expect(metaRows.length, 1);
+      expect(metaRows.first.read<String>('value'), '1680000000');
 
       await db.close();
     });

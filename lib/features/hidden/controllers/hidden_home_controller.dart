@@ -18,6 +18,7 @@ class HiddenHomeController extends GetxController {
   final RxList<CategoryEntity> categories = <CategoryEntity>[].obs;
   StreamSubscription<List<HiddenNoteEntity>>? _notesSubscription;
   final Rxn<String> selectedCategoryId = Rxn<String>();
+  final RxInt selectedSegmentIndex = 0.obs; // 0 = Notes, 1 = Chats
 
   // Reactive Stats
   final RxInt notesCount = 0.obs;

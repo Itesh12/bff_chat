@@ -17,6 +17,7 @@ import 'package:memovault/features/hidden/middleware/hidden_session_guard_middle
 import 'package:memovault/features/hidden/views/hidden_pin_screen.dart';
 import 'package:memovault/features/hidden/views/hidden_home_screen.dart';
 import 'package:memovault/features/hidden/views/hidden_note_editor_screen.dart';
+import 'package:memovault/features/hidden/views/hidden_chat_screen.dart';
 
 abstract final class AppPages {
   static final List<GetPage<dynamic>> pages = [
@@ -102,6 +103,12 @@ abstract final class AppPages {
     GetPage(
       name: AppRoutes.hiddenEditor,
       page: () => const HiddenNoteEditorScreen(),
+      binding: HiddenBinding(),
+      middlewares: [HiddenSessionGuardMiddleware()],
+    ),
+    GetPage(
+      name: AppRoutes.hiddenChat,
+      page: () => const HiddenChatScreen(),
       binding: HiddenBinding(),
       middlewares: [HiddenSessionGuardMiddleware()],
     ),

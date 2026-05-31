@@ -1,6 +1,8 @@
 import 'package:get/get.dart';
+import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/features/hidden/controllers/hidden_activation_controller.dart';
 import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
+import 'package:memovault/features/hidden/controllers/hidden_messaging_controller.dart';
 import 'package:memovault/features/hidden/data/repositories/hidden_notes_repository_impl.dart';
 import 'package:memovault/features/hidden/domain/repositories/hidden_notes_repository.dart';
 import 'package:memovault/features/hidden/data/repositories/hidden_categories_repository_impl.dart';
@@ -34,6 +36,13 @@ class HiddenBinding extends Bindings {
       () => HiddenHomeController(
         Get.find<HiddenNotesRepository>(),
         Get.find<HiddenCategoriesRepository>(),
+        Get.find<HiddenSessionService>(),
+      ),
+    );
+
+    Get.lazyPut<HiddenMessagingController>(
+      () => HiddenMessagingController(
+        Get.find<MessagingRepository>(),
         Get.find<HiddenSessionService>(),
       ),
     );

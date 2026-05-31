@@ -4,6 +4,8 @@ import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/core/design_system/design_system.dart';
 import 'package:memovault/core/widgets/note_card.dart';
 import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
+import 'package:memovault/features/hidden/controllers/hidden_messaging_controller.dart';
+import 'package:memovault/features/hidden/views/hidden_chats_view.dart';
 
 class HiddenHomeScreen extends GetView<HiddenHomeController> {
   const HiddenHomeScreen({super.key});
@@ -145,56 +147,192 @@ class HiddenHomeScreen extends GetView<HiddenHomeController> {
                   ),
                 ),
               ),
-              
-              // Main content
-              Expanded(
-                child: controller.notes.isEmpty
-                    ? AppEmptyState(
-                        customIcon: const Text(
-                          '🔒',
-                          style: TextStyle(fontSize: 40),
+
+              // Premium Segmented Switcher (Notes vs Chats)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s4),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.dividerColor.withValues(alpha: 0.05),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            controller.onUserInteraction();
+                            controller.selectedSegmentIndex.value = 0;
+                          },
+                          child: Obx(() {
+                            final isSelected = controller.selectedSegmentIndex.value == 0;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? theme.cardColor : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.05),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        )
+                                      ]
+                                    : null,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.note_alt_outlined,
+                                    size: 16,
+                                    color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                                  ),
+                                  const AppGap.h8(),
+                                  Text(
+                                    'Secret Notes',
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.bodyMedium.copyWith(
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
                         ),
-                        title: 'No Hidden Notes',
-                        message: 'Your private notes will appear here.',
-                        ctaLabel: 'Create Hidden Note',
-                        onCtaTap: () => Get.toNamed(AppRoutes.hiddenEditor),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(AppSpacing.s16),
-                        itemCount: controller.notes.length,
-                        itemBuilder: (context, index) {
-                          final note = controller.notes[index];
-                          final cat = controller.categories
-                              .firstWhereOrNull((c) => c.id == note.categoryId);
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: AppSpacing.s12),
-                            child: NoteCard(
-                              key: ValueKey(note.id),
-                              note: note.toNoteEntity(),
-                              category: cat,
-                              isGrid: false,
-                              onTap: () {
-                                controller.onUserInteraction();
-                                Get.toNamed(AppRoutes.hiddenEditor, arguments: note.id);
-                              },
-                              onFavoriteTap: () => controller.toggleFavorite(note.id),
-                            ),
-                          );
-                        },
                       ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            controller.onUserInteraction();
+                            controller.selectedSegmentIndex.value = 1;
+                          },
+                          child: Obx(() {
+                            final isSelected = controller.selectedSegmentIndex.value == 1;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? theme.cardColor : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.05),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        )
+                                      ]
+                                    : null,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.chat_bubble_outline_rounded,
+                                    size: 16,
+                                    color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                                  ),
+                                  const AppGap.h8(),
+                                  Text(
+                                    'Secure Chats',
+                                    textAlign: TextAlign.center,
+                                    style: AppTypography.bodyMedium.copyWith(
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const AppGap.v8(),
+              
+              // Main content switcher
+              Expanded(
+                child: Obx(() {
+                  if (controller.selectedSegmentIndex.value == 0) {
+                    return controller.notes.isEmpty
+                        ? AppEmptyState(
+                            customIcon: const Text(
+                              '🔒',
+                              style: TextStyle(fontSize: 40),
+                            ),
+                            title: 'No Hidden Notes',
+                            message: 'Your private notes will appear here.',
+                            ctaLabel: 'Create Hidden Note',
+                            onCtaTap: () => Get.toNamed(AppRoutes.hiddenEditor),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
+                            itemCount: controller.notes.length,
+                            itemBuilder: (context, index) {
+                              final note = controller.notes[index];
+                              final cat = controller.categories
+                                  .firstWhereOrNull((c) => c.id == note.categoryId);
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: AppSpacing.s12),
+                                child: NoteCard(
+                                  key: ValueKey(note.id),
+                                  note: note.toNoteEntity(),
+                                  category: cat,
+                                  isGrid: false,
+                                  onTap: () {
+                                    controller.onUserInteraction();
+                                    Get.toNamed(AppRoutes.hiddenEditor, arguments: note.id);
+                                  },
+                                  onFavoriteTap: () => controller.toggleFavorite(note.id),
+                                ),
+                              );
+                            },
+                          );
+                  } else {
+                    return const HiddenChatsView();
+                  }
+                }),
               ),
             ],
           );
         }),
         floatingActionButton: Obx(() {
-          if (controller.notes.isEmpty) {
-            return const SizedBox.shrink();
+          final isChats = controller.selectedSegmentIndex.value == 1;
+          if (isChats) {
+            final messagingController = Get.find<HiddenMessagingController>();
+            if (messagingController.conversations.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return AppButton.primary(
+              text: 'New Chat',
+              icon: Icons.chat_bubble_outline_rounded,
+              onPressed: () {
+                controller.onUserInteraction();
+                const view = HiddenChatsView();
+                view.showAddChatBottomSheet(context, messagingController);
+              },
+            );
+          } else {
+            if (controller.notes.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return AppButton.primary(
+              text: 'New Note',
+              icon: Icons.add,
+              onPressed: () => Get.toNamed(AppRoutes.hiddenEditor),
+            );
           }
-          return AppButton.primary(
-            text: 'New Note',
-            icon: Icons.add,
-            onPressed: () => Get.toNamed(AppRoutes.hiddenEditor),
-          );
         }),
       ),
     );

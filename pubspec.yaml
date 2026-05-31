@@ -20,6 +20,8 @@ dependencies:
   sqflite_sqlcipher: ^3.4.0
   drift_sqflite: ^2.0.1
   crypto: ^3.0.7
+  intl: ^0.20.2
+  uuid: ^4.5.3
 
 dev_dependencies:
   flutter_test:
