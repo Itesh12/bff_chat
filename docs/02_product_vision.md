@@ -8,7 +8,7 @@
 
 ## 1. Vision Statement
 
-Build a **dual-purpose mobile application** that delivers a premium, convincing notes and vault experience to all users, while simultaneously providing a **covert, end-to-end encrypted, real-time private messaging platform** accessible only to an invited Vault Network.
+Build a **dual-purpose mobile application** that delivers a premium, convincing notes and vault experience to all users, while simultaneously providing a **covert, compliance-auditable, real-time private messaging platform** alongside a **completely secure, local-only Hidden Vault**, accessible only to an invited Vault Network.
 
 The notes application must be genuinely useful — not a hollow shell. A user who discovers the app must conclude it is simply a well-crafted productivity tool.
 
@@ -35,7 +35,7 @@ An application that:
 1. **Looks like a Notes app.** The App Store listing, icon, screenshots, and default UI all describe a note-taking / vault experience.
 2. **Functions as a Notes app.** The notes functionality is real, complete, and polished — it is not a placeholder.
 3. **Hides a messaging layer.** Accessible only via a secret activation mechanism known only to invited users.
-4. **Protects access at every level.** Invite-only accounts, device binding, biometric/PIN locks, end-to-end encryption.
+4. **Protects access at every level.** Invite-only accounts, device binding, biometric/PIN locks, secure storage, and compliance-auditable messaging.
 5. **Leaves no visible trace.** Notifications disguised, no visible messaging indicators, panic mode available.
 
 ---
@@ -77,10 +77,10 @@ The messaging layer must be entirely invisible:
 
 ### Pillar 3 — Uncompromising Security
 Every layer of the stack must be secured:
-- End-to-end encryption in transit
-- AES-256 encryption at rest
+- Compliance-auditable messaging encryption (X25519 ECIES escrow)
+- AES-256 encryption at rest (SQLCipher database for local data)
 - Biometric + PIN protection
-- Panic mode (fake vault + fake conversations — no data wipe)
+- Panic mode (Wipes local `hidden_vault.db` and active session records immediately)
 - Screenshot blocking
 - Device binding
 - Remote revocation
@@ -132,6 +132,7 @@ The following are explicitly **out of scope** for this product:
 |---|---|
 | **Notes cloud sync** | Enabled — Local-first (Isar) → Firestore background sync; fully functional offline |
 | **Max vault network users** | 2–10 production users; architecture designed for 1,000 |
-| **Admin dashboard** | No custom dashboard; Firebase Console + Admin SDK scripts only |
+| **Admin dashboard** | Phase 4.9 Compliance & Admin Platform with Level 1 metadata and Level 2 authorized KMS content decryption under audit logging |
 | **Invite flow** | Manual invite codes (Phase 4); QR onboarding deferred to future phase |
-| **Panic mode data** | Shows fake vault + fake conversations; does NOT wipe local or cloud data |
+| **Panic mode data** | Wipes local `hidden_vault.db` and active session records immediately (does NOT wipe public notes or public messages on the server) |
+| **Security Model** | Dual-Security: Private local Hidden Vault (no administrative access) and Compliance-Auditable Messaging (ADR-024) |
