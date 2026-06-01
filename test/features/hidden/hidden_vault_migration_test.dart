@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,7 +7,7 @@ import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 
 void main() {
   group('HiddenVaultDatabase Schema Migration Tests', () {
-    test('upgrades from v1 to v5 successfully and preserves data', () async {
+    test('upgrades from v1 to v6 successfully and preserves data', () async {
       // Create a temporary file for the test database
       final tempDir = Directory.systemTemp.createTempSync('memo_migration_test');
       final dbFile = File('${tempDir.path}/test_hidden_vault.db');
@@ -46,11 +47,11 @@ void main() {
       await executorv1.close();
 
       // 2. Open the database using our actual Drift class HiddenVaultDatabase
-      final executorv4 = NativeDatabase(dbFile);
-      final db = HiddenVaultDatabase(executorv4);
+      final executorv6 = NativeDatabase(dbFile);
+      final db = HiddenVaultDatabase(executorv6);
 
-      // 3. Assert schema version is 5
-      expect(db.schemaVersion, 5);
+      // 3. Assert schema version is 6
+      expect(db.schemaVersion, 6);
 
       // 5. Query all notes and verify they exist and have correct values
       final notes = await db.hiddenNotesDao.watchAllNotes().first;
@@ -79,7 +80,7 @@ void main() {
       await db.close();
     });
 
-    test('upgrades from v2 to v5 successfully, creates hidden_categories and messaging tables', () async {
+    test('upgrades from v2 to v6 successfully, creates hidden_categories, messaging, and cryptographic tables', () async {
       // Create a temporary file for the test database
       final tempDir = Directory.systemTemp.createTempSync('memo_migration_v4_test');
       final dbFile = File('${tempDir.path}/test_hidden_vault.db');
@@ -118,11 +119,11 @@ void main() {
       await executorv2.close();
 
       // 2. Open using Drift class
-      final executorv4 = NativeDatabase(dbFile);
-      final db = HiddenVaultDatabase(executorv4);
+      final executorv6 = NativeDatabase(dbFile);
+      final db = HiddenVaultDatabase(executorv6);
 
-      // Assert schema version is 5
-      expect(db.schemaVersion, 5);
+      // Assert schema version is 6
+      expect(db.schemaVersion, 6);
 
       // Verify categories table is created and writable
       await db.customStatement("INSERT INTO hidden_categories (id, name, color_hex, display_order, created_at) VALUES ('cat_1', 'Work', 'FF0000', 0, 1680000000);");
@@ -149,6 +150,11 @@ void main() {
       await db.customStatement("INSERT INTO attachments (id, message_id, encrypted_remote_url, key_payload, local_cache_path, size_bytes, state) VALUES ('a1', 'm1', 'url', 'key', '/cache', 1024, 'completed');");
       await db.customStatement("INSERT INTO sync_metadata (key, value, updated_at) VALUES ('last_sync', '1680000000', 1680000000);");
 
+      // Verify cryptographic tables are created and writable
+      await db.customStatement("INSERT INTO signal_sessions (address_name, device_id, session_record) VALUES ('alice_bob', 1, x'1234');");
+      await db.customStatement("INSERT INTO signal_one_time_prekeys (pre_key_id, pre_key_record) VALUES (1, x'5678');");
+      await db.customStatement("INSERT INTO signal_skipped_keys (sender_id, ratchet_key, sequence_number, key_bytes, created_at) VALUES ('p1', 'ratchet_key_hex', 10, x'90ab', 1680000000);");
+
       final partRows = await db.customSelect('SELECT * FROM participants').get();
       expect(partRows.length, 1);
       expect(partRows.first.read<String>('username'), '@alice');
@@ -173,6 +179,21 @@ void main() {
       final metaRows = await db.customSelect('SELECT * FROM sync_metadata').get();
       expect(metaRows.length, 1);
       expect(metaRows.first.read<String>('value'), '1680000000');
+
+      final sessionRows = await db.customSelect('SELECT * FROM signal_sessions').get();
+      expect(sessionRows.length, 1);
+      expect(sessionRows.first.read<String>('address_name'), 'alice_bob');
+      expect(sessionRows.first.read<Uint8List>('session_record'), [0x12, 0x34]);
+
+      final otpRows = await db.customSelect('SELECT * FROM signal_one_time_prekeys').get();
+      expect(otpRows.length, 1);
+      expect(otpRows.first.read<int>('pre_key_id'), 1);
+      expect(otpRows.first.read<Uint8List>('pre_key_record'), [0x56, 0x78]);
+
+      final skippedRows = await db.customSelect('SELECT * FROM signal_skipped_keys').get();
+      expect(skippedRows.length, 1);
+      expect(skippedRows.first.read<String>('sender_id'), 'p1');
+      expect(skippedRows.first.read<Uint8List>('key_bytes'), [0x90, 0xab]);
 
       await db.close();
     });

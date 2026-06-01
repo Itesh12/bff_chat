@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:memovault/domain/messaging/participant_entity.dart';
 import 'package:memovault/domain/messaging/conversation_entity.dart';
 import 'package:memovault/domain/messaging/message_entity.dart';
@@ -54,4 +55,24 @@ abstract class MessagingRepository {
   Future<String?> getSyncMetadata(String key);
   Future<void> setSyncMetadata(String key, String value);
   Future<void> deleteExpiredHandshakes();
+  Future<void> deleteExpiredSkippedKeys();
+
+  // ─── E2EE Crypto Storage ──────────────────────────────────────────────────
+  Future<Uint8List?> loadSession(String addressName, int deviceId, bool isHidden);
+  Future<void> storeSession(String addressName, int deviceId, Uint8List sessionRecord, bool isHidden);
+  Future<bool> containsSession(String addressName, int deviceId, bool isHidden);
+  Future<void> deleteSession(String addressName, int deviceId, bool isHidden);
+  Future<void> deleteAllSessions(String name, bool isHidden);
+  Future<List<int>> getSubDeviceSessions(String name, bool isHidden);
+
+  Future<Uint8List?> loadPreKey(int preKeyId, bool isHidden);
+  Future<void> storePreKey(int preKeyId, Uint8List preKeyRecord, bool isHidden);
+  Future<bool> containsPreKey(int preKeyId, bool isHidden);
+  Future<void> removePreKey(int preKeyId, bool isHidden);
+  Future<List<int>> getAllPreKeyIds(bool isHidden);
+
+  Future<bool> checkSkippedKeyExists(String senderId, String ratchetKey, int sequenceNumber, bool isHidden);
+  Future<int> getSkippedKeysCount(String senderId, bool isHidden);
+  Future<void> insertSkippedKey(String senderId, String ratchetKey, int sequenceNumber, bool isHidden);
+  Future<void> deleteSkippedKey(String senderId, String ratchetKey, int sequenceNumber, bool isHidden);
 }

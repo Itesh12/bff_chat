@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/core/storage/sqflite_cipher_executor.dart';
 import 'package:memovault/core/storage/tables/messaging_tables.dart';
+import 'package:memovault/core/storage/tables/cryptographic_tables.dart';
 import 'package:memovault/features/hidden/data/hidden_notes_dao.dart';
 import 'package:memovault/features/hidden/data/tables/hidden_notes_table.dart';
 import 'package:memovault/features/hidden/data/tables/hidden_categories_table.dart';
@@ -20,6 +21,9 @@ part 'hidden_vault_database.g.dart';
     MessageReceiptsTable,
     AttachmentsTable,
     SyncMetadataTable,
+    SignalSessionsTable,
+    SignalOneTimePrekeysTable,
+    SignalSkippedKeysTable,
   ],
   daos: [HiddenNotesDao, HiddenCategoriesDao],
 )
@@ -27,15 +31,15 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   HiddenVaultDatabase(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
-        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v5).');
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v6).');
         await m.createAll();
-        AppLogger.info('[HiddenVaultDatabase] Schema v5 created.');
+        AppLogger.info('[HiddenVaultDatabase] Schema v6 created.');
       },
       onUpgrade: (Migrator m, int from, int to) async {
         AppLogger.info('[HiddenVaultDatabase] Upgrading schema from v$from to v$to.');
@@ -70,6 +74,12 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
         } else if (from < 5) {
           await m.addColumn(participantsTable, participantsTable.trustState);
           AppLogger.info('[HiddenVaultDatabase] v5 migration: added participantsTable.trustState column.');
+        }
+        if (from < 6) {
+          await m.createTable(signalSessionsTable);
+          await m.createTable(signalOneTimePrekeysTable);
+          await m.createTable(signalSkippedKeysTable);
+          AppLogger.info('[HiddenVaultDatabase] v6 migration: added cryptographic tables.');
         }
       },
     );

@@ -8,6 +8,7 @@ import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:memovault/features/messaging/services/signal_session_manager.dart';
+import 'package:memovault/features/messaging/services/prekey_rotation_service.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 
 class SignalSyncService extends GetxService {
@@ -34,6 +35,7 @@ class SignalSyncService extends GetxService {
       if (state == HiddenSessionState.active) {
         startSyncListener();
         _sessionManager.checkAndReplenishOneTimePrekeys();
+        Get.find<PrekeyRotationService>().checkAndRotatePrekeys();
       } else {
         stopSyncListener();
       }
@@ -103,27 +105,44 @@ class SignalSyncService extends GetxService {
       return;
     }
 
-    if (type == 3 && data['senderUsername'] != null) {
-      // Handshake / PreKeySignalMessage
-      final senderUsername = data['senderUsername'] as String;
-      final senderIdentityKeyPubHex = data['senderIdentityKeyPubHex'] as String;
+    // Check duplicate/already processed message
+    final existingMsg = await _messagingRepository.getMessageById(messageId);
+    if (existingMsg != null) {
+      AppLogger.info('[SignalSyncService] Duplicate message $messageId already processed. Deleting from queue.');
+      await doc.reference.delete();
+      return;
+    }
 
-      await _sessionManager.receiveHandshake(
-        senderUid: senderUid,
-        ciphertextHex: ciphertextHex,
-        messageType: type,
-        senderUsername: senderUsername,
-        senderIdentityKeyPubHex: senderIdentityKeyPubHex,
-        isHidden: true,
-      );
-    } else {
-      // Normal E2EE whisper message (type 2 or type 3 first message after handshake)
-      await _sessionManager.decryptAndStoreMessage(
-        senderUid: senderUid,
-        ciphertextHex: ciphertextHex,
-        messageType: type,
-        messageId: messageId,
-      );
+    try {
+      if (type == 3 && data['senderUsername'] != null) {
+        // Handshake / PreKeySignalMessage
+        final senderUsername = data['senderUsername'] as String;
+        final senderIdentityKeyPubHex = data['senderIdentityKeyPubHex'] as String;
+
+        await _sessionManager.receiveHandshake(
+          senderUid: senderUid,
+          ciphertextHex: ciphertextHex,
+          messageType: type,
+          senderUsername: senderUsername,
+          senderIdentityKeyPubHex: senderIdentityKeyPubHex,
+          isHidden: true,
+        );
+      } else {
+        // Normal E2EE whisper message (type 2 or type 3 first message after handshake)
+        await _sessionManager.decryptAndStoreMessage(
+          senderUid: senderUid,
+          ciphertextHex: ciphertextHex,
+          messageType: type,
+          messageId: messageId,
+        );
+      }
+    } on StateError catch (e) {
+      if (e.message == 'REPLAYED_MESSAGE' || e.message == 'DUPLICATE_MESSAGE') {
+        AppLogger.warning('[SignalSyncService] Replayed or duplicate message detected. Deleting from queue: ${e.message}');
+        await doc.reference.delete();
+        return;
+      }
+      rethrow;
     }
 
     // Store-Before-Delete: Delete from Firestore ONLY after successful local processing

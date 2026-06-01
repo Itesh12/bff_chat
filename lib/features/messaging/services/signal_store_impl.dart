@@ -8,8 +8,14 @@ class SignalStoreImpl implements SessionStore, IdentityKeyStore, PreKeyStore, Si
   final SecureStorageService _secureStorage;
   final MessagingIdentityService _identityService;
   final MessagingRepository _messagingRepository;
+  final bool isHidden;
 
-  SignalStoreImpl(this._secureStorage, this._identityService, this._messagingRepository);
+  SignalStoreImpl(
+    this._secureStorage,
+    this._identityService,
+    this._messagingRepository, {
+    this.isHidden = true,
+  });
 
   static Uint8List _hexToBytes(String hex) {
     final bytes = Uint8List(hex.length ~/ 2);
@@ -104,71 +110,68 @@ class SignalStoreImpl implements SessionStore, IdentityKeyStore, PreKeyStore, Si
 
   @override
   Future<SessionRecord?> loadSession(ProtocolAddress address) async {
-    final key = 'session_rec_${address.name()}:${address.deviceId()}';
-    final hex = await _secureStorage.read(key);
-    if (hex == null) return null;
-    return SessionRecord.deserialize(bytes: _hexToBytes(hex));
+    final bytes = await _messagingRepository.loadSession(address.name(), address.deviceId(), isHidden);
+    if (bytes == null) return null;
+    return SessionRecord.deserialize(bytes: bytes);
   }
 
   @override
   Future<void> storeSession(ProtocolAddress address, SessionRecord record) async {
-    final key = 'session_rec_${address.name()}:${address.deviceId()}';
-    await _secureStorage.write(key, _bytesToHex(record.serialize()));
+    await _messagingRepository.storeSession(
+      address.name(),
+      address.deviceId(),
+      Uint8List.fromList(record.serialize()),
+      isHidden,
+    );
   }
 
   @override
   Future<bool> containsSession(ProtocolAddress address) async {
-    final key = 'session_rec_${address.name()}:${address.deviceId()}';
-    final val = await _secureStorage.read(key);
-    return val != null;
+    return await _messagingRepository.containsSession(address.name(), address.deviceId(), isHidden);
   }
 
   @override
   Future<void> deleteSession(ProtocolAddress address) async {
-    final key = 'session_rec_${address.name()}:${address.deviceId()}';
-    await _secureStorage.delete(key);
+    await _messagingRepository.deleteSession(address.name(), address.deviceId(), isHidden);
   }
 
   @override
   Future<void> deleteAllSessions(String name) async {
-    final key = 'session_rec_$name:1';
-    await _secureStorage.delete(key);
+    await _messagingRepository.deleteAllSessions(name, isHidden);
   }
 
   @override
   Future<List<int>> getSubDeviceSessions(String name) async {
-    final hasSession = await containsSession(ProtocolAddress(name: name, deviceId: 1));
-    return hasSession ? [1] : [];
+    return await _messagingRepository.getSubDeviceSessions(name, isHidden);
   }
 
   // ─── PreKeyStore ──────────────────────────────────────────────────────────
 
   @override
   Future<PreKeyRecord?> loadPreKey(int preKeyId) async {
-    final hex = await _secureStorage.read('ot_prekey_record_$preKeyId');
-    if (hex == null) return null;
-    return PreKeyRecord.deserialize(bytes: _hexToBytes(hex));
+    final bytes = await _messagingRepository.loadPreKey(preKeyId, isHidden);
+    if (bytes == null) return null;
+    return PreKeyRecord.deserialize(bytes: bytes);
   }
 
   @override
   Future<void> storePreKey(int preKeyId, PreKeyRecord record) async {
-    await _secureStorage.write('ot_prekey_record_$preKeyId', _bytesToHex(record.serialize()));
+    await _messagingRepository.storePreKey(preKeyId, Uint8List.fromList(record.serialize()), isHidden);
   }
 
   @override
   Future<bool> containsPreKey(int preKeyId) async {
-    final val = await _secureStorage.read('ot_prekey_record_$preKeyId');
-    return val != null;
+    return await _messagingRepository.containsPreKey(preKeyId, isHidden);
   }
 
   @override
   Future<void> removePreKey(int preKeyId) async {
-    await _secureStorage.delete('ot_prekey_record_$preKeyId');
+    await _messagingRepository.removePreKey(preKeyId, isHidden);
   }
 
   @override
   Future<List<int>> getAllPreKeyIds() async {
-    return await _identityService.getOneTimePreKeyIds();
+    return await _messagingRepository.getAllPreKeyIds(isHidden);
   }
 
   // ─── SignedPreKeyStore ────────────────────────────────────────────────────

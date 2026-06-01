@@ -222,7 +222,11 @@ void main() {
         publicKey: bobOtKeyPair.getPublicKey(),
         privateKey: bobOtKeyPair,
       );
-      await bobStorage.write('ot_prekey_record_1', _bytesToHex(bobOtRecord.serialize()));
+      await bobRepo.storePreKey(
+        1,
+        Uint8List.fromList(bobOtRecord.serialize()),
+        false,
+      );
 
       // ─── Step 3: Populate Mock Pseudonym Directory ───
       SignalSessionManager.mockPseudonyms = {
@@ -301,8 +305,8 @@ void main() {
       expect(bobAliceConv, isNotNull);
 
       // ─── Step 6: Verify Bidirectional Encryption works ───
-      final aliceStore = SignalStoreImpl(aliceStorage, aliceIdentityService, aliceRepo);
-      final bobStore = SignalStoreImpl(bobStorage, bobIdentityService, bobRepo);
+      final aliceStore = SignalStoreImpl(aliceStorage, aliceIdentityService, aliceRepo, isHidden: false);
+      final bobStore = SignalStoreImpl(bobStorage, bobIdentityService, bobRepo, isHidden: false);
 
       final aliceCipher = SessionCipher(
         localAddress: ProtocolAddress(name: 'alice_uid', deviceId: 1),
@@ -431,7 +435,11 @@ void main() {
         publicKey: bobOtKeyPair.getPublicKey(),
         privateKey: bobOtKeyPair,
       );
-      await bobStorage.write('ot_prekey_record_1', _bytesToHex(bobOtRecord.serialize()));
+      await bobRepo.storePreKey(
+        1,
+        Uint8List.fromList(bobOtRecord.serialize()),
+        true,
+      );
 
       // Run Alice initiate session
       await aliceSessionManager.initiateSession(targetUsername: 'bob_username', isHidden: true);

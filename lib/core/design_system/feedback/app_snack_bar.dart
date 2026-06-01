@@ -9,7 +9,6 @@ import 'package:memovault/core/config/env_config.dart';
 /// A static design system helper to trigger consistent, themed snackbars.
 /// Avoids using [Get.snackbar] directly by structuring colors, margins, and icons internally.
 abstract final class AppSnackBar {
-  
   /// Displays a success notification.
   static void success({required String title, required String message}) {
     _show(
@@ -58,7 +57,9 @@ abstract final class AppSnackBar {
     final colors = theme.extension<AppColorScheme>();
     final baseColor = colors != null
         ? getThemeColor(colors)
-        : (theme.brightness == Brightness.dark ? Colors.tealAccent : Colors.teal);
+        : (theme.brightness == Brightness.dark
+            ? Colors.tealAccent
+            : Colors.teal);
 
     Get.snackbar(
       title,
@@ -67,26 +68,32 @@ abstract final class AppSnackBar {
         title,
         style: AppTypography.bodyMedium.copyWith(
           fontWeight: FontWeight.bold,
-          color: theme.brightness == Brightness.dark ? Colors.white : Colors.black,
+          color:
+              theme.brightness == Brightness.dark ? Colors.white : Colors.black,
         ),
       ),
       messageText: Text(
         message,
         style: AppTypography.bodySmall.copyWith(
-          color: (theme.brightness == Brightness.dark ? Colors.white70 : Colors.black87),
+          color: (theme.brightness == Brightness.dark
+              ? Colors.white70
+              : Colors.black87),
         ),
       ),
       icon: Icon(icon, color: baseColor, size: 22),
-      backgroundColor: theme.brightness == Brightness.dark ? Colors.grey[900] : Colors.white,
+      backgroundColor:
+          theme.brightness == Brightness.dark ? Colors.grey[900] : Colors.white,
       borderColor: baseColor.withValues(alpha: 0.3),
       borderWidth: 1.0,
       borderRadius: AppRadius.rMedium,
       margin: const EdgeInsets.all(AppSpacing.s16),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s16, vertical: AppSpacing.s12),
       snackPosition: SnackPosition.BOTTOM,
       boxShadows: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: theme.brightness == Brightness.dark ? 0.3 : 0.06),
+          color: Colors.black.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.3 : 0.06),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),

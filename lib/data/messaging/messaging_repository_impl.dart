@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:drift/drift.dart';
 import 'package:memovault/core/services/database_service.dart';
 import 'package:memovault/core/storage/app_database.dart';
@@ -16,6 +17,9 @@ class MessagingRepositoryImpl implements MessagingRepository {
 
   MessagingRepositoryImpl(this._databaseService, this._hiddenVaultService) {
     deleteExpiredHandshakes().catchError((e) {
+      // Ignore background cleanup failures on startup
+    });
+    deleteExpiredSkippedKeys().catchError((e) {
       // Ignore background cleanup failures on startup
     });
   }
@@ -850,6 +854,280 @@ class MessagingRepositoryImpl implements MessagingRepository {
     if (privateDb != null) {
       await (privateDb.delete(privateDb.messagesTable)
             ..where((t) => t.messageType.equals('handshake') & t.createdAt.isSmallerThan(Variable(cutoff))))
+          .go();
+    }
+  }
+
+  @override
+  Future<void> deleteExpiredSkippedKeys() async {
+    final cutoff = DateTime.now().toUtc().subtract(const Duration(days: 30));
+
+    // Purge public db
+    final publicDb = _databaseService.db;
+    await (publicDb.delete(publicDb.signalSkippedKeysTable)
+          ..where((t) => t.createdAt.isSmallerThan(Variable(cutoff))))
+        .go();
+
+    // Purge private db if open
+    final privateDb = _hiddenVaultService.db;
+    if (privateDb != null) {
+      await (privateDb.delete(privateDb.signalSkippedKeysTable)
+            ..where((t) => t.createdAt.isSmallerThan(Variable(cutoff))))
+          .go();
+    }
+  }
+
+  // ─── E2EE Crypto Storage Implementation ───────────────────────────────────
+
+  @override
+  Future<Uint8List?> loadSession(String addressName, int deviceId, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final row = await (db.select(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(addressName) & t.deviceId.equals(deviceId)))
+          .getSingleOrNull();
+      return row != null ? Uint8List.fromList(row.sessionRecord) : null;
+    } else {
+      final db = _databaseService.db;
+      final row = await (db.select(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(addressName) & t.deviceId.equals(deviceId)))
+          .getSingleOrNull();
+      return row != null ? Uint8List.fromList(row.sessionRecord) : null;
+    }
+  }
+
+  @override
+  Future<void> storeSession(String addressName, int deviceId, Uint8List sessionRecord, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      await db.into(db.signalSessionsTable).insertOnConflictUpdate(
+        private_db.SignalSessionsTableCompanion(
+          addressName: Value(addressName),
+          deviceId: Value(deviceId),
+          sessionRecord: Value(sessionRecord),
+        ),
+      );
+    } else {
+      final db = _databaseService.db;
+      await db.into(db.signalSessionsTable).insertOnConflictUpdate(
+        SignalSessionsTableCompanion(
+          addressName: Value(addressName),
+          deviceId: Value(deviceId),
+          sessionRecord: Value(sessionRecord),
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<bool> containsSession(String addressName, int deviceId, bool isHidden) async {
+    if (isHidden) {
+      final db = _hiddenVaultService.db;
+      if (db == null) return false;
+      final row = await (db.select(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(addressName) & t.deviceId.equals(deviceId)))
+          .getSingleOrNull();
+      return row != null;
+    } else {
+      final db = _databaseService.db;
+      final row = await (db.select(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(addressName) & t.deviceId.equals(deviceId)))
+          .getSingleOrNull();
+      return row != null;
+    }
+  }
+
+  @override
+  Future<void> deleteSession(String addressName, int deviceId, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      await (db.delete(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(addressName) & t.deviceId.equals(deviceId)))
+          .go();
+    } else {
+      final db = _databaseService.db;
+      await (db.delete(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(addressName) & t.deviceId.equals(deviceId)))
+          .go();
+    }
+  }
+
+  @override
+  Future<void> deleteAllSessions(String name, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      await (db.delete(db.signalSessionsTable)..where((t) => t.addressName.equals(name))).go();
+    } else {
+      final db = _databaseService.db;
+      await (db.delete(db.signalSessionsTable)..where((t) => t.addressName.equals(name))).go();
+    }
+  }
+
+  @override
+  Future<List<int>> getSubDeviceSessions(String name, bool isHidden) async {
+    if (isHidden) {
+      final db = _hiddenVaultService.db;
+      if (db == null) return [];
+      final rows = await (db.select(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(name) & t.deviceId.equals(1).not()))
+          .get();
+      return rows.map((r) => r.deviceId).toList();
+    } else {
+      final db = _databaseService.db;
+      final rows = await (db.select(db.signalSessionsTable)
+            ..where((t) => t.addressName.equals(name) & t.deviceId.equals(1).not()))
+          .get();
+      return rows.map((r) => r.deviceId).toList();
+    }
+  }
+
+  @override
+  Future<Uint8List?> loadPreKey(int preKeyId, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final row = await (db.select(db.signalOneTimePrekeysTable)..where((t) => t.preKeyId.equals(preKeyId)))
+          .getSingleOrNull();
+      return row != null ? Uint8List.fromList(row.preKeyRecord) : null;
+    } else {
+      final db = _databaseService.db;
+      final row = await (db.select(db.signalOneTimePrekeysTable)..where((t) => t.preKeyId.equals(preKeyId)))
+          .getSingleOrNull();
+      return row != null ? Uint8List.fromList(row.preKeyRecord) : null;
+    }
+  }
+
+  @override
+  Future<void> storePreKey(int preKeyId, Uint8List preKeyRecord, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      await db.into(db.signalOneTimePrekeysTable).insertOnConflictUpdate(
+        private_db.SignalOneTimePrekeysTableCompanion(
+          preKeyId: Value(preKeyId),
+          preKeyRecord: Value(preKeyRecord),
+        ),
+      );
+    } else {
+      final db = _databaseService.db;
+      await db.into(db.signalOneTimePrekeysTable).insertOnConflictUpdate(
+        SignalOneTimePrekeysTableCompanion(
+          preKeyId: Value(preKeyId),
+          preKeyRecord: Value(preKeyRecord),
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<bool> containsPreKey(int preKeyId, bool isHidden) async {
+    if (isHidden) {
+      final db = _hiddenVaultService.db;
+      if (db == null) return false;
+      final row = await (db.select(db.signalOneTimePrekeysTable)..where((t) => t.preKeyId.equals(preKeyId)))
+          .getSingleOrNull();
+      return row != null;
+    } else {
+      final db = _databaseService.db;
+      final row = await (db.select(db.signalOneTimePrekeysTable)..where((t) => t.preKeyId.equals(preKeyId)))
+          .getSingleOrNull();
+      return row != null;
+    }
+  }
+
+  @override
+  Future<void> removePreKey(int preKeyId, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      await (db.delete(db.signalOneTimePrekeysTable)..where((t) => t.preKeyId.equals(preKeyId))).go();
+    } else {
+      final db = _databaseService.db;
+      await (db.delete(db.signalOneTimePrekeysTable)..where((t) => t.preKeyId.equals(preKeyId))).go();
+    }
+  }
+
+  @override
+  Future<List<int>> getAllPreKeyIds(bool isHidden) async {
+    if (isHidden) {
+      final db = _hiddenVaultService.db;
+      if (db == null) return [];
+      final rows = await db.select(db.signalOneTimePrekeysTable).get();
+      return rows.map((r) => r.preKeyId).toList();
+    } else {
+      final db = _databaseService.db;
+      final rows = await db.select(db.signalOneTimePrekeysTable).get();
+      return rows.map((r) => r.preKeyId).toList();
+    }
+  }
+
+  @override
+  Future<bool> checkSkippedKeyExists(String senderId, String ratchetKey, int sequenceNumber, bool isHidden) async {
+    if (isHidden) {
+      final db = _hiddenVaultService.db;
+      if (db == null) return false;
+      final row = await (db.select(db.signalSkippedKeysTable)
+            ..where((t) => t.senderId.equals(senderId) & t.ratchetKey.equals(ratchetKey) & t.sequenceNumber.equals(sequenceNumber)))
+          .getSingleOrNull();
+      return row != null;
+    } else {
+      final db = _databaseService.db;
+      final row = await (db.select(db.signalSkippedKeysTable)
+            ..where((t) => t.senderId.equals(senderId) & t.ratchetKey.equals(ratchetKey) & t.sequenceNumber.equals(sequenceNumber)))
+          .getSingleOrNull();
+      return row != null;
+    }
+  }
+
+  @override
+  Future<int> getSkippedKeysCount(String senderId, bool isHidden) async {
+    if (isHidden) {
+      final db = _hiddenVaultService.db;
+      if (db == null) return 0;
+      final list = await (db.select(db.signalSkippedKeysTable)..where((t) => t.senderId.equals(senderId))).get();
+      return list.length;
+    } else {
+      final db = _databaseService.db;
+      final list = await (db.select(db.signalSkippedKeysTable)..where((t) => t.senderId.equals(senderId))).get();
+      return list.length;
+    }
+  }
+
+  @override
+  Future<void> insertSkippedKey(String senderId, String ratchetKey, int sequenceNumber, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      await db.into(db.signalSkippedKeysTable).insert(
+        private_db.SignalSkippedKeysTableCompanion(
+          senderId: Value(senderId),
+          ratchetKey: Value(ratchetKey),
+          sequenceNumber: Value(sequenceNumber),
+          keyBytes: Value(Uint8List(0)),
+          createdAt: Value(DateTime.now().toUtc()),
+        ),
+      );
+    } else {
+      final db = _databaseService.db;
+      await db.into(db.signalSkippedKeysTable).insert(
+        SignalSkippedKeysTableCompanion(
+          senderId: Value(senderId),
+          ratchetKey: Value(ratchetKey),
+          sequenceNumber: Value(sequenceNumber),
+          keyBytes: Value(Uint8List(0)),
+          createdAt: Value(DateTime.now().toUtc()),
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> deleteSkippedKey(String senderId, String ratchetKey, int sequenceNumber, bool isHidden) async {
+    if (isHidden) {
+      final db = _getPrivateDb();
+      await (db.delete(db.signalSkippedKeysTable)
+            ..where((t) => t.senderId.equals(senderId) & t.ratchetKey.equals(ratchetKey) & t.sequenceNumber.equals(sequenceNumber)))
+          .go();
+    } else {
+      final db = _databaseService.db;
+      await (db.delete(db.signalSkippedKeysTable)
+            ..where((t) => t.senderId.equals(senderId) & t.ratchetKey.equals(ratchetKey) & t.sequenceNumber.equals(sequenceNumber)))
           .go();
     }
   }

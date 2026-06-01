@@ -12,6 +12,8 @@ import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/hidden/services/seed_recovery_service.dart';
+import 'package:memovault/features/messaging/services/signal_store_impl.dart';
+import 'package:memovault/domain/messaging/messaging_repository.dart';
 
 class MessagingSetupController extends GetxController {
   final MessagingIdentityService _identityService;
@@ -261,27 +263,25 @@ class MessagingSetupController extends GetxController {
 
       // 4. Generate 100 One-Time Prekeys
       final secureStorage = Get.find<SecureStorageService>();
+      final signalStore = SignalStoreImpl(
+        secureStorage,
+        _identityService,
+        Get.find<MessagingRepository>(),
+        isHidden: true,
+      );
       final oneTimePrekeysData = <Map<String, dynamic>>[];
       for (int i = 1; i <= 100; i++) {
         final otKeyPair = PrivateKey.generate();
         final otPublicKey = otKeyPair.getPublicKey();
         final otPubKeyHex = _bytesToHex(otPublicKey.serialize());
-        final otPrivKeyHex = _bytesToHex(otKeyPair.serialize());
 
-        // Save locally in identity service
-        await _identityService.saveOneTimePreKey(
-          id: i,
-          privKeyHex: otPrivKeyHex,
-          pubKeyHex: otPubKeyHex,
-        );
-
-        // Serialize and save PreKeyRecord for SignalStoreImpl
+        // Serialize and save PreKeyRecord for SignalStoreImpl via SQLCipher
         final otRecord = PreKeyRecord(
           id: i,
           publicKey: otPublicKey,
           privateKey: otKeyPair,
         );
-        await secureStorage.write('ot_prekey_record_$i', _bytesToHex(otRecord.serialize()));
+        await signalStore.storePreKey(i, otRecord);
 
         oneTimePrekeysData.add({
           'id': i,

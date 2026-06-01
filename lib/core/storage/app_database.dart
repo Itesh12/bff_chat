@@ -6,6 +6,7 @@ import 'package:memovault/core/storage/tables/app_metadata_table.dart';
 import 'package:memovault/core/storage/tables/categories_table.dart';
 import 'package:memovault/core/storage/tables/notes_table.dart';
 import 'package:memovault/core/storage/tables/messaging_tables.dart';
+import 'package:memovault/core/storage/tables/cryptographic_tables.dart';
 import 'package:memovault/data/notes/notes_dao.dart';
 import 'package:memovault/data/notes/categories_dao.dart';
 
@@ -30,6 +31,9 @@ part 'app_database.g.dart';
     MessageReceiptsTable,
     AttachmentsTable,
     SyncMetadataTable,
+    SignalSessionsTable,
+    SignalOneTimePrekeysTable,
+    SignalSkippedKeysTable,
   ],
   daos: [NotesDao, CategoriesDao],
 )
@@ -37,7 +41,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -62,6 +66,11 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(syncMetadataTable);
         } else if (from < 4) {
           await m.addColumn(participantsTable, participantsTable.trustState);
+        }
+        if (from < 5) {
+          await m.createTable(signalSessionsTable);
+          await m.createTable(signalOneTimePrekeysTable);
+          await m.createTable(signalSkippedKeysTable);
         }
         AppLogger.info('[AppDatabase] Migration completed');
       },
