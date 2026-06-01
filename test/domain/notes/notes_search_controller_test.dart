@@ -65,6 +65,8 @@ void main() {
     late NotesSearchController controller;
 
     setUp(() {
+      Get.testMode = true;
+      Get.reset();
       Get.put<ActivationTriggerService>(ActivationTriggerService());
       repository = FakeNotesRepository();
       controller = NotesSearchController(repository);
@@ -93,7 +95,7 @@ void main() {
     });
 
     tearDown(() {
-      Get.delete<ActivationTriggerService>();
+      Get.reset();
     });
 
     test('should not fire search if query is less than 2 characters', () async {

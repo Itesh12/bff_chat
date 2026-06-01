@@ -25,6 +25,7 @@ class HiddenMessagingController extends GetxController {
   StreamSubscription<List<ConversationEntity>>? _conversationsSubscription;
   
   final Rx<MessagingSetupState> setupState = MessagingSetupState.unconfigured.obs;
+  final RxBool showArchived = false.obs;
 
   @override
   void onInit() {
@@ -42,7 +43,13 @@ class HiddenMessagingController extends GetxController {
     _conversationsSubscription = _messagingRepository
         .watchAllConversations(isHidden: true)
         .listen((data) async {
-      conversations.assignAll(data);
+      final sortedData = List<ConversationEntity>.from(data);
+      sortedData.sort((a, b) {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+      conversations.assignAll(sortedData);
       for (final conv in data) {
         if (!participants.containsKey(conv.participantId)) {
           final p = await _messagingRepository.getParticipantById(conv.participantId);
@@ -175,6 +182,29 @@ class HiddenMessagingController extends GetxController {
     AppSnackBar.info(
       title: 'Block Status',
       message: 'Contact block state updated.',
+    );
+  }
+
+  Future<void> togglePinned(String id) async {
+    onUserInteraction();
+    final conv = conversations.firstWhereOrNull((c) => c.id == id);
+    if (conv == null) return;
+
+    if (!conv.isPinned) {
+      final pinnedCount = conversations.where((c) => c.isPinned).length;
+      if (pinnedCount >= 5) {
+        AppSnackBar.error(
+          title: 'Limit Reached',
+          message: 'Maximum pinned chats = 5',
+        );
+        return;
+      }
+    }
+
+    await _messagingRepository.updateConversationPinnedState(id, !conv.isPinned);
+    AppSnackBar.success(
+      title: conv.isPinned ? 'Unpinned' : 'Pinned',
+      message: conv.isPinned ? 'Chat unpinned successfully.' : 'Chat pinned to top.',
     );
   }
 }

@@ -28,6 +28,8 @@ class ConversationsTable extends Table {
   BoolColumn get isArchived => boolean().withDefault(const Constant(false))();
   BoolColumn get isMuted => boolean().withDefault(const Constant(false))();
   BoolColumn get isBlocked => boolean().withDefault(const Constant(false))();
+  TextColumn get draft => text().nullable()();
+  BoolColumn get isPinned => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -43,12 +45,13 @@ class MessagesTable extends Table {
   TextColumn get senderId => text().references(ParticipantsTable, #id)();
   TextColumn get encryptedContent => text()();
   TextColumn get nonce => text()();
-  TextColumn get state => text()(); // sending, sent, delivered, read, failed, expired
+  TextColumn get state => text()(); // queued, sending, sent, delivered, read, failed, expired
   TextColumn get messageType => text().withDefault(const Constant('text'))(); // text, image, video, file, voice, system, handshake
   BoolColumn get isDeleted => boolean().withDefault(const Constant(false))();
   DateTimeColumn get deletedAt => dateTime().nullable()();
   IntColumn get version => integer().withDefault(const Constant(1))();
   DateTimeColumn get createdAt => dateTime()();
+  TextColumn get searchIndex => text().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -76,11 +79,20 @@ class AttachmentsTable extends Table {
 
   TextColumn get id => text()();
   TextColumn get messageId => text().references(MessagesTable, #id, onDelete: KeyAction.cascade)();
-  TextColumn get encryptedRemoteUrl => text()();
-  TextColumn get keyPayload => text()(); // AES key encrypted with E2E session key
-  TextColumn get localCachePath => text().nullable()();
-  IntColumn get sizeBytes => integer()();
-  TextColumn get state => text()(); // uploading, uploaded, decrypting, completed, failed
+  TextColumn get type => text()(); // image, video, voice, file
+  TextColumn get fileName => text().nullable()();
+  TextColumn get mimeType => text().nullable()();
+  IntColumn get size => integer()();
+  TextColumn get thumbnailPath => text().nullable()();
+  TextColumn get localPath => text().nullable()();
+  TextColumn get remotePath => text().nullable()();
+  TextColumn get keyPayload => text().nullable()(); // AES key encrypted with E2E session key
+  TextColumn get status => text()(); // queued, uploading, completed, decrypting, failed
+  IntColumn get uploadedBytes => integer().withDefault(const Constant(0))();
+  IntColumn get totalBytes => integer().withDefault(const Constant(0))();
+  IntColumn get encryptionVersion => integer().withDefault(const Constant(1))();
+  TextColumn get checksumSha256 => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
 
   @override
   Set<Column> get primaryKey => {id};

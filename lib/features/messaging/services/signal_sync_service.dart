@@ -129,11 +129,15 @@ class SignalSyncService extends GetxService {
         );
       } else {
         // Normal E2EE whisper message (type 2 or type 3 first message after handshake)
+        final attachmentData = data['attachment'] as Map<String, dynamic>?;
+        final messageType = data['messageType'] as String? ?? 'text';
         await _sessionManager.decryptAndStoreMessage(
           senderUid: senderUid,
           ciphertextHex: ciphertextHex,
           messageType: type,
           messageId: messageId,
+          attachmentData: attachmentData,
+          incomingMessageType: messageType,
         );
       }
     } on StateError catch (e) {

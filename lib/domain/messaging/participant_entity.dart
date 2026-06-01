@@ -14,6 +14,16 @@ class ParticipantEntity {
     this.trustState = 'unknown',
   });
 
+  String get displayName {
+    if (username.isEmpty) return '';
+    final clean = username.replaceAll('@', '');
+    if (clean.isEmpty) return '';
+    return clean
+        .split('_')
+        .map((s) => s.isNotEmpty ? s[0].toUpperCase() + s.substring(1) : '')
+        .join(' ');
+  }
+
   String get identityFingerprint {
     if (identityKeyPub.isEmpty) return '';
     final bytes = utf8.encode(identityKeyPub);

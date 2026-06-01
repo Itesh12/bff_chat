@@ -1,39 +1,77 @@
+import 'package:memovault/domain/messaging/attachment_type.dart';
+
 class AttachmentEntity {
   final String id;
   final String messageId;
-  final String encryptedRemoteUrl;
-  final String keyPayload; // AES key encrypted with E2E session key
-  final String? localCachePath;
-  final int sizeBytes;
-  final String state; // uploading, uploaded, decrypting, completed, failed
+  final AttachmentType type;
+  final String? fileName;
+  final String? mimeType;
+  final int size;
+  final String? thumbnailPath;
+  final String? localPath;
+  final String? remotePath;
+  final String? keyPayload;
+  final String status;
+  final int uploadedBytes;
+  final int totalBytes;
+  final int encryptionVersion;
+  final String? checksumSha256;
+  final DateTime createdAt;
 
   const AttachmentEntity({
     required this.id,
     required this.messageId,
-    required this.encryptedRemoteUrl,
-    required this.keyPayload,
-    this.localCachePath,
-    required this.sizeBytes,
-    required this.state,
+    required this.type,
+    this.fileName,
+    this.mimeType,
+    required this.size,
+    this.thumbnailPath,
+    this.localPath,
+    this.remotePath,
+    this.keyPayload,
+    required this.status,
+    this.uploadedBytes = 0,
+    this.totalBytes = 0,
+    this.encryptionVersion = 1,
+    this.checksumSha256,
+    required this.createdAt,
   });
 
   AttachmentEntity copyWith({
     String? id,
     String? messageId,
-    String? encryptedRemoteUrl,
+    AttachmentType? type,
+    String? fileName,
+    String? mimeType,
+    int? size,
+    String? thumbnailPath,
+    String? localPath,
+    String? remotePath,
     String? keyPayload,
-    String? localCachePath,
-    int? sizeBytes,
-    String? state,
+    String? status,
+    int? uploadedBytes,
+    int? totalBytes,
+    int? encryptionVersion,
+    String? checksumSha256,
+    DateTime? createdAt,
   }) {
     return AttachmentEntity(
       id: id ?? this.id,
       messageId: messageId ?? this.messageId,
-      encryptedRemoteUrl: encryptedRemoteUrl ?? this.encryptedRemoteUrl,
+      type: type ?? this.type,
+      fileName: fileName ?? this.fileName,
+      mimeType: mimeType ?? this.mimeType,
+      size: size ?? this.size,
+      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      localPath: localPath ?? this.localPath,
+      remotePath: remotePath ?? this.remotePath,
       keyPayload: keyPayload ?? this.keyPayload,
-      localCachePath: localCachePath ?? this.localCachePath,
-      sizeBytes: sizeBytes ?? this.sizeBytes,
-      state: state ?? this.state,
+      status: status ?? this.status,
+      uploadedBytes: uploadedBytes ?? this.uploadedBytes,
+      totalBytes: totalBytes ?? this.totalBytes,
+      encryptionVersion: encryptionVersion ?? this.encryptionVersion,
+      checksumSha256: checksumSha256 ?? this.checksumSha256,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }

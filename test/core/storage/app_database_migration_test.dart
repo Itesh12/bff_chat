@@ -67,8 +67,8 @@ void main() {
       final executorv3 = NativeDatabase(dbFile);
       final db = AppDatabase(executorv3);
 
-      // Assert schema version is 5
-      expect(db.schemaVersion, 5);
+      // Assert schema version is 7
+      expect(db.schemaVersion, 7);
 
       // Verify category and note are preserved
       final catRows = await db.customSelect('SELECT * FROM categories').get();
@@ -85,7 +85,7 @@ void main() {
       await db.customStatement("INSERT INTO conversations (id, participant_id, last_message_id, updated_at, unread_count, is_hidden, is_archived, is_muted, is_blocked) VALUES ('c1', 'p1', NULL, 1680000000, 0, 0, 0, 0, 0);");
       await db.customStatement("INSERT INTO messages (id, conversation_id, sender_id, encrypted_content, nonce, state, created_at) VALUES ('m1', 'c1', 'p1', 'enc_content', 'nonce_val', 'sent', 1680000000);");
       await db.customStatement("INSERT INTO message_receipts (id, message_id, participant_id, status, timestamp) VALUES ('r1', 'm1', 'p1', 'delivered', 1680000000);");
-      await db.customStatement("INSERT INTO attachments (id, message_id, encrypted_remote_url, key_payload, local_cache_path, size_bytes, state) VALUES ('a1', 'm1', 'remote_url', 'key', NULL, 2048, 'uploading');");
+      await db.customStatement("INSERT INTO attachments (id, message_id, type, file_name, mime_type, size, thumbnail_path, local_path, remote_path, key_payload, status, created_at) VALUES ('a1', 'm1', 'image', 'test.jpg', 'image/jpeg', 2048, NULL, NULL, 'remote_path_val', 'key', 'completed', 1680000000);");
       await db.customStatement("INSERT INTO sync_metadata (key, value, updated_at) VALUES ('cursor', '100', 1680000000);");
 
       // Verify new cryptographic tables are created and writable
@@ -112,7 +112,7 @@ void main() {
 
       final attachRows = await db.customSelect('SELECT * FROM attachments').get();
       expect(attachRows.length, 1);
-      expect(attachRows.first.read<String>('encrypted_remote_url'), 'remote_url');
+      expect(attachRows.first.read<String>('remote_path'), 'remote_path_val');
 
       final metaRows = await db.customSelect('SELECT * FROM sync_metadata').get();
       expect(metaRows.length, 1);

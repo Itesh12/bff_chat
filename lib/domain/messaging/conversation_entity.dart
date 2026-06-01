@@ -8,6 +8,8 @@ class ConversationEntity {
   final bool isArchived;
   final bool isMuted;
   final bool isBlocked;
+  final String? draft;
+  final bool isPinned;
 
   const ConversationEntity({
     required this.id,
@@ -19,6 +21,8 @@ class ConversationEntity {
     required this.isArchived,
     required this.isMuted,
     required this.isBlocked,
+    this.draft,
+    this.isPinned = false,
   });
 
   ConversationEntity copyWith({
@@ -31,6 +35,8 @@ class ConversationEntity {
     bool? isArchived,
     bool? isMuted,
     bool? isBlocked,
+    String? draft,
+    bool? isPinned,
   }) {
     return ConversationEntity(
       id: id ?? this.id,
@@ -42,6 +48,8 @@ class ConversationEntity {
       isArchived: isArchived ?? this.isArchived,
       isMuted: isMuted ?? this.isMuted,
       isBlocked: isBlocked ?? this.isBlocked,
+      draft: draft ?? this.draft,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 }

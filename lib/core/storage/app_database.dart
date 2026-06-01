@@ -41,7 +41,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
@@ -71,6 +71,21 @@ class AppDatabase extends _$AppDatabase {
           await m.createTable(signalSessionsTable);
           await m.createTable(signalOneTimePrekeysTable);
           await m.createTable(signalSkippedKeysTable);
+        }
+        if (from >= 3 && from < 6) {
+          await m.addColumn(conversationsTable, conversationsTable.draft);
+          await m.addColumn(conversationsTable, conversationsTable.isPinned);
+          await m.addColumn(messagesTable, messagesTable.searchIndex);
+          await m.deleteTable('attachments');
+          await m.createTable(attachmentsTable);
+        }
+        if (from < 7) {
+          if (from == 6) {
+            await m.addColumn(attachmentsTable, attachmentsTable.uploadedBytes);
+            await m.addColumn(attachmentsTable, attachmentsTable.totalBytes);
+            await m.addColumn(attachmentsTable, attachmentsTable.encryptionVersion);
+            await m.addColumn(attachmentsTable, attachmentsTable.checksumSha256);
+          }
         }
         AppLogger.info('[AppDatabase] Migration completed');
       },

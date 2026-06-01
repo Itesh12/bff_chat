@@ -7,17 +7,116 @@ import 'package:memovault/features/hidden/controllers/hidden_chat_controller.dar
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/messaging/services/signal_session_manager.dart';
+import 'dart:io';
+import 'package:memovault/domain/messaging/attachment_entity.dart';
 import 'package:intl/intl.dart';
+
+class ChatListItem {
+  final String? dateHeader;
+  final MessageEntity? message;
+  final bool showAvatarAndMeta;
+  final bool isConsecutive;
+
+  ChatListItem({
+    this.dateHeader,
+    this.message,
+    this.showAvatarAndMeta = true,
+    this.isConsecutive = false,
+  });
+}
 
 class HiddenChatScreen extends StatelessWidget {
   const HiddenChatScreen({super.key});
+
+  List<ChatListItem> _buildChatListItems(List<MessageEntity> messages) {
+    final list = <ChatListItem>[];
+    if (messages.isEmpty) return list;
+
+    DateTime? lastDate;
+    MessageEntity? lastMsg;
+
+    for (int i = 0; i < messages.length; i++) {
+      final msg = messages[i];
+      final msgDate = msg.createdAt.toLocal();
+
+      // 1. Date Separator Check
+      if (lastDate == null ||
+          msgDate.year != lastDate.year ||
+          msgDate.month != lastDate.month ||
+          msgDate.day != lastDate.day) {
+        lastDate = msgDate;
+
+        String dateStr = '';
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final yesterday = today.subtract(const Duration(days: 1));
+        final checkDate = DateTime(msgDate.year, msgDate.month, msgDate.day);
+
+        if (checkDate == today) {
+          dateStr = 'Today';
+        } else if (checkDate == yesterday) {
+          dateStr = 'Yesterday';
+        } else {
+          dateStr = DateFormat('MMMM d, yyyy').format(msgDate);
+        }
+
+        list.add(ChatListItem(dateHeader: dateStr));
+      }
+
+      // 2. Message Grouping Check
+      bool showAvatarAndMeta = true;
+      bool isConsecutive = false;
+
+      if (lastMsg != null && lastMsg.senderId == msg.senderId) {
+        final diff = msg.createdAt.difference(lastMsg.createdAt).inMinutes;
+        if (diff < 2) {
+          showAvatarAndMeta = false;
+          isConsecutive = true;
+        }
+      }
+
+      list.add(ChatListItem(
+        message: msg,
+        showAvatarAndMeta: showAvatarAndMeta,
+        isConsecutive: isConsecutive,
+      ));
+
+      lastMsg = msg;
+    }
+
+    return list;
+  }
+
+  void _showClearConfirmDialog(BuildContext context, HiddenChatController controller) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Chat History?'),
+        content: const Text(
+          'Are you sure you want to clear all messages in this conversation? Messages will be soft-deleted to preserve compliance audit trails.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              controller.clearHistory();
+            },
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final String conversationId = Get.arguments as String;
     final theme = Theme.of(context);
 
-    // Dynamic clean dependency injection per chat thread
     final controller = Get.put(
       HiddenChatController(
         Get.find<MessagingRepository>(),
@@ -35,12 +134,10 @@ class HiddenChatScreen extends StatelessWidget {
         canPop: true,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) {
-            // Clean up the unique dynamic controller instance when navigating back
             Get.delete<HiddenChatController>(tag: conversationId);
           }
         },
         child: AppScaffold(
-          // title is null to suppress default AppBar rendering, allowing us to build a custom premium nav bar
           title: null,
           body: Column(
             children: [
@@ -49,54 +146,146 @@ class HiddenChatScreen extends StatelessWidget {
                 bottom: false,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s8, vertical: AppSpacing.s4),
-                  child: Row(
-                    children: [
-                      AppIconButton.secondary(
-                        icon: Icons.arrow_back_ios_new_rounded,
-                        tooltip: 'Back',
-                        onPressed: () {
-                          Get.delete<HiddenChatController>(tag: conversationId);
-                          Get.back();
-                        },
-                      ),
-                      const AppGap.h8(),
-                      Expanded(
-                        child: Obx(() {
-                          final other = controller.otherParticipant.value;
-                          return Column(
+                  child: Obx(() {
+                    final isSearching = controller.isSearchActive.value;
+                    if (isSearching) {
+                      return Row(
+                        children: [
+                          AppIconButton.secondary(
+                            icon: Icons.close_rounded,
+                            tooltip: 'Close Search',
+                            onPressed: () {
+                              controller.onUserInteraction();
+                              controller.isSearchActive.value = false;
+                              controller.searchQuery.value = '';
+                              controller.searchController.clear();
+                              controller.searchResults.clear();
+                            },
+                          ),
+                          const AppGap.h8(),
+                          Expanded(
+                            child: AppTextField(
+                              controller: controller.searchController,
+                              hintText: 'Search in conversation...',
+                              onChanged: controller.runSearch,
+                              autofocus: true,
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    final other = controller.otherParticipant.value;
+                    final otherOnline = controller.isOtherOnline.value;
+                    final otherTyping = controller.isOtherTyping.value;
+
+                    String subtitle = 'Offline';
+                    if (otherTyping) {
+                      subtitle = 'typing...';
+                    } else if (otherOnline) {
+                      subtitle = 'Online';
+                    } else {
+                      subtitle = 'Secure Chat';
+                    }
+
+                    return Row(
+                      children: [
+                        AppIconButton.secondary(
+                          icon: Icons.arrow_back_ios_new_rounded,
+                          tooltip: 'Back',
+                          onPressed: () {
+                            Get.delete<HiddenChatController>(tag: conversationId);
+                            Get.back();
+                          },
+                        ),
+                        const AppGap.h8(),
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              other != null && other.displayName.isNotEmpty
+                                  ? other.displayName.replaceAll('@', '').substring(0, 1).toUpperCase()
+                                  : (other?.username != null && other!.username.isNotEmpty)
+                                      ? other.username.replaceAll('@', '').substring(0, 1).toUpperCase()
+                                      : 'C',
+                              style: AppTypography.bodyLarge.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const AppGap.h12(),
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                children: [
-                                  const Text('🔒 ', style: TextStyle(fontSize: 14)),
-                                  Expanded(
-                                    child: Text(
-                                      other?.username ?? 'Secure Chat',
-                                      style: AppTypography.titleMedium.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                (other != null && other.displayName.isNotEmpty)
+                                    ? other.displayName
+                                    : (other?.username ?? 'Secure Chat'),
+                                style: AppTypography.titleMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'End-to-End Encrypted',
+                                subtitle,
                                 style: AppTypography.bodySmall.copyWith(
-                                  color: theme.colorScheme.primary.withValues(alpha: 0.8),
-                                  fontWeight: FontWeight.w600,
+                                  color: otherTyping
+                                      ? Colors.green
+                                      : otherOnline
+                                          ? theme.colorScheme.primary
+                                          : theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+                                  fontWeight: FontWeight.bold,
                                   fontSize: 10,
                                 ),
                               ),
                             ],
-                          );
-                        }),
-                      ),
-                    ],
-                  ),
+                          ),
+                        ),
+                        AppIconButton.secondary(
+                          icon: Icons.search_rounded,
+                          tooltip: 'Search Messages',
+                          onPressed: () {
+                            controller.onUserInteraction();
+                            controller.isSearchActive.value = true;
+                          },
+                        ),
+                        PopupMenuButton<String>(
+                          icon: Icon(Icons.more_vert_rounded, color: theme.iconTheme.color?.withValues(alpha: 0.8)),
+                          onSelected: (val) {
+                            if (val == 'clear') {
+                              _showClearConfirmDialog(context, controller);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'clear',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete_sweep_rounded, color: Colors.red, size: 20),
+                                  AppGap.h8(),
+                                  Text('Clear Chat History', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  }),
                 ),
               ),
               const Divider(height: 1, thickness: 0.5),
@@ -108,7 +297,11 @@ class HiddenChatScreen extends StatelessWidget {
                     return const Center(child: AppLoading.medium());
                   }
 
-                  if (controller.messages.isEmpty) {
+                  final displayMessages = controller.isSearchActive.value && controller.searchQuery.value.isNotEmpty
+                      ? controller.searchResults
+                      : controller.messages;
+
+                  if (displayMessages.isEmpty) {
                     return Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -127,14 +320,16 @@ class HiddenChatScreen extends StatelessWidget {
                           ),
                           const AppGap.v16(),
                           Text(
-                            'No Messages Yet',
+                            controller.isSearchActive.value ? 'No Matches Found' : 'No Messages Yet',
                             style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const AppGap.v8(),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s32),
                             child: Text(
-                              'Your messages are secured locally with physical database isolation and AES key enclaves.',
+                              controller.isSearchActive.value
+                                  ? 'Try adjusting your search query to find local messages.'
+                                  : 'Your messages are secured locally with physical database isolation and AES key enclaves.',
                               textAlign: TextAlign.center,
                               style: AppTypography.bodyMedium.copyWith(
                                 color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
@@ -146,15 +341,34 @@ class HiddenChatScreen extends StatelessWidget {
                     );
                   }
 
-                  return ListView.builder(
-                    controller: controller.scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
-                    itemCount: controller.messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = controller.messages[index];
-                      final isMe = msg.senderId == 'me';
-                      return _buildMessageBubble(context, controller, msg, isMe);
-                    },
+                  final listItems = _buildChatListItems(displayMessages);
+
+                  return Stack(
+                    children: [
+                      ListView.builder(
+                        controller: controller.scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
+                        itemCount: listItems.length,
+                        itemBuilder: (context, index) {
+                          final item = listItems[index];
+                          if (item.dateHeader != null) {
+                            return _buildDateSeparator(context, item.dateHeader!);
+                          } else {
+                            final msg = item.message!;
+                            final isMe = msg.senderId == 'me';
+                            return _buildMessageBubble(
+                              context: context,
+                              controller: controller,
+                              msg: msg,
+                              isMe: isMe,
+                              showAvatarAndMeta: item.showAvatarAndMeta,
+                              isConsecutive: item.isConsecutive,
+                            );
+                          }
+                        },
+                      ),
+                      _buildJumpToLatestButton(context, controller),
+                    ],
                   );
                 }),
               ),
@@ -182,11 +396,17 @@ class HiddenChatScreen extends StatelessWidget {
                             ),
                             child: Row(
                               children: [
-                                const AppGap.h16(),
+                                const SizedBox(width: AppSpacing.s8),
+                                AppIconButton.secondary(
+                                  icon: Icons.attach_file_rounded,
+                                  tooltip: 'Attach Media',
+                                  onPressed: () => _showMediaAttachmentOptions(context, controller),
+                                ),
+                                const AppGap.h8(),
                                 Expanded(
                                   child: TextField(
                                     controller: controller.textController,
-                                    onChanged: (_) => controller.onUserInteraction(),
+                                    onChanged: controller.handleTextChanged,
                                     style: AppTypography.bodyMedium,
                                     decoration: const InputDecoration(
                                       hintText: 'Type secure message...',
@@ -232,6 +452,247 @@ class HiddenChatScreen extends StatelessWidget {
               }),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateSeparator(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.05),
+            ),
+          ),
+          child: Text(
+            text,
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJumpToLatestButton(BuildContext context, HiddenChatController controller) {
+    final theme = Theme.of(context);
+    return Obx(() {
+      if (!controller.showJumpButton.value) {
+        return const SizedBox.shrink();
+      }
+      return Positioned(
+        bottom: 16,
+        right: 16,
+        child: FloatingActionButton.small(
+          onPressed: () {
+            controller.onUserInteraction();
+            controller.scrollController.animateTo(
+              controller.scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          },
+          backgroundColor: theme.colorScheme.primary,
+          child: const Icon(Icons.arrow_downward_rounded, color: Colors.white),
+        ),
+      );
+    });
+  }
+
+  Widget _buildMessageStatusIndicator(BuildContext context, String state) {
+    final theme = Theme.of(context);
+    switch (state) {
+      case 'queued':
+      case 'sending':
+        return Icon(
+          Icons.access_time_rounded,
+          size: 11,
+          color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
+        );
+      case 'sent':
+        return Icon(
+          Icons.done_rounded,
+          size: 12,
+          color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
+        );
+      case 'delivered':
+        return Icon(
+          Icons.done_all_rounded,
+          size: 12,
+          color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.4),
+        );
+      case 'read':
+        return Icon(
+          Icons.done_all_rounded,
+          size: 12,
+          color: theme.colorScheme.primary,
+        );
+      case 'failed':
+        return const Icon(
+          Icons.error_outline_rounded,
+          size: 12,
+          color: Colors.red,
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildMessageBubble({
+    required BuildContext context,
+    required HiddenChatController controller,
+    required MessageEntity msg,
+    required bool isMe,
+    required bool showAvatarAndMeta,
+    required bool isConsecutive,
+  }) {
+    final theme = Theme.of(context);
+    final timeStr = DateFormat('h:mm a').format(msg.createdAt.toLocal());
+
+    return Padding(
+      padding: EdgeInsets.only(
+        top: isConsecutive ? 2.0 : 8.0,
+        bottom: 2.0,
+      ),
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isMe && showAvatarAndMeta) ...[
+                  Obx(() {
+                    final other = controller.otherParticipant.value;
+                    final initials = (other != null && other.displayName.isNotEmpty)
+                        ? other.displayName.replaceAll('@', '').substring(0, 1).toUpperCase()
+                        : (other?.username != null && other!.username.isNotEmpty)
+                            ? other.username.replaceAll('@', '').substring(0, 1).toUpperCase()
+                            : 'C';
+                    return Container(
+                      width: 24,
+                      height: 24,
+                      margin: const EdgeInsets.only(right: 8, bottom: 4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.2)),
+                      ),
+                      child: Center(
+                        child: Text(
+                          initials,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ] else if (!isMe) ...[
+                  const SizedBox(width: 32),
+                ],
+                GestureDetector(
+                  onLongPress: () => _showBubbleMenu(context, controller, msg),
+                  child: Container(
+                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.68),
+                    padding: (msg.messageType == 'image')
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: 10.0),
+                    decoration: (msg.messageType == 'image')
+                        ? BoxDecoration(
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
+                              bottomLeft: Radius.circular(isMe ? 16 : (showAvatarAndMeta ? 4 : 16)),
+                              bottomRight: Radius.circular(isMe ? (showAvatarAndMeta ? 4 : 16) : 16),
+                            ),
+                          )
+                        : BoxDecoration(
+                            gradient: isMe
+                                ? LinearGradient(
+                                    colors: [
+                                      theme.colorScheme.primary,
+                                      theme.colorScheme.primary.withValues(alpha: 0.85),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : null,
+                            color: isMe ? null : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
+                              bottomLeft: Radius.circular(isMe ? 16 : (showAvatarAndMeta ? 4 : 16)),
+                              bottomRight: Radius.circular(isMe ? (showAvatarAndMeta ? 4 : 16) : 16),
+                            ),
+                            border: isMe
+                                ? null
+                                : Border.all(
+                                    color: theme.dividerColor.withValues(alpha: 0.08),
+                                  ),
+                          ),
+                    child: (msg.messageType == 'image' || msg.messageType == 'file' || msg.messageType == 'video')
+                        ? Obx(() {
+                            final attachment = controller.attachments[msg.id];
+                            if (attachment == null) {
+                              return const SizedBox(
+                                width: 100,
+                                height: 60,
+                                child: Center(child: AppLoading.small()),
+                              );
+                            }
+                            return _buildAttachmentWidget(context, controller, msg, attachment, isMe);
+                          })
+                        : Text(
+                            msg.encryptedContent,
+                            style: AppTypography.bodyMedium.copyWith(
+                              color: isMe ? Colors.white : theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            if (!isConsecutive) ...[
+              const SizedBox(height: 2),
+              Padding(
+                padding: EdgeInsets.only(
+                  left: isMe ? 4.0 : 36.0,
+                  right: isMe ? 4.0 : 4.0,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      timeStr,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 9,
+                        color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    if (isMe) ...[
+                      const AppGap.h4(),
+                      _buildMessageStatusIndicator(context, msg.state),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -319,89 +780,6 @@ class HiddenChatScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMessageBubble(
-    BuildContext context,
-    HiddenChatController controller,
-    MessageEntity msg,
-    bool isMe,
-  ) {
-    final theme = Theme.of(context);
-    final timeStr = DateFormat('h:mm a').format(msg.createdAt.toLocal());
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
-      child: Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            GestureDetector(
-              onLongPress: () => _showBubbleMenu(context, controller, msg),
-              child: Container(
-                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
-                decoration: BoxDecoration(
-                  gradient: isMe
-                      ? LinearGradient(
-                          colors: [
-                            theme.colorScheme.primary,
-                            theme.colorScheme.primary.withValues(alpha: 0.85),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : null,
-                  color: isMe ? null : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(16),
-                    topRight: const Radius.circular(16),
-                    bottomLeft: Radius.circular(isMe ? 16 : 4),
-                    bottomRight: Radius.circular(isMe ? 4 : 16),
-                  ),
-                  border: isMe
-                      ? null
-                      : Border.all(
-                          color: theme.dividerColor.withValues(alpha: 0.08),
-                        ),
-                ),
-                child: Text(
-                  msg.encryptedContent, // Display text
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: isMe ? Colors.white : theme.textTheme.bodyLarge?.color,
-                  ),
-                ),
-              ),
-            ),
-            const AppGap.v4(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    timeStr,
-                    style: AppTypography.bodySmall.copyWith(
-                      fontSize: 9,
-                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
-                    ),
-                  ),
-                  if (isMe) ...[
-                    const AppGap.h4(),
-                    Icon(
-                      Icons.done_all_rounded,
-                      size: 11,
-                      color: theme.colorScheme.primary.withValues(alpha: 0.6),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showBubbleMenu(BuildContext context, HiddenChatController controller, MessageEntity msg) {
     AppBottomSheet.show(
       context,
@@ -439,5 +817,300 @@ class HiddenChatScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showMediaAttachmentOptions(BuildContext context, HiddenChatController controller) async {
+    controller.onUserInteraction();
+    final files = await controller.getMockFilesToPick();
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        final theme = Theme.of(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.s16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Select Media to Send',
+                  style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const AppGap.v16(),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                    child: Icon(Icons.image_rounded, color: theme.colorScheme.primary),
+                  ),
+                  title: const Text('Secret Photo (mock_receipt.jpg)'),
+                  subtitle: const Text('Image attachment - 256x256 Red Box'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    controller.sendMediaAttachment(files[0], 'image/jpeg');
+                  },
+                ),
+                const AppGap.v8(),
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                    child: Icon(Icons.picture_as_pdf_rounded, color: theme.colorScheme.primary),
+                  ),
+                  title: const Text('Tax Statement (tax_statement.pdf)'),
+                  subtitle: const Text('File attachment - Secure Document'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    controller.sendMediaAttachment(files[1], 'application/pdf');
+                  },
+                ),
+                const AppGap.v16(),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAttachmentWidget(
+    BuildContext context,
+    HiddenChatController controller,
+    MessageEntity msg,
+    AttachmentEntity attachment,
+    bool isMe,
+  ) {
+    final theme = Theme.of(context);
+    final isImage = attachment.type.name == 'image';
+    final textColor = isMe ? Colors.white : theme.textTheme.bodyLarge?.color;
+
+    // Active upload/download progress
+    final total = attachment.totalBytes > 0 ? attachment.totalBytes : attachment.size;
+    final progress = total > 0 ? attachment.uploadedBytes / total : 0.0;
+
+    Widget progressOverlay() {
+      if (attachment.status == 'uploading') {
+        return Container(
+          color: Colors.black45,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${(progress * 100).toStringAsFixed(0)}%',
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (attachment.status == 'decrypting') {
+        return Container(
+          color: Colors.black45,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Decrypting...',
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (attachment.status == 'queued' || attachment.status == 'encrypting') {
+        return Container(
+          color: Colors.black45,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Encrypting...',
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    if (isImage) {
+      final hasLocal = attachment.localPath != null &&
+          attachment.localPath!.isNotEmpty &&
+          File(attachment.localPath!).existsSync();
+
+      return GestureDetector(
+        onTap: () {
+          if (!hasLocal && attachment.status != 'uploading' && attachment.status != 'decrypting') {
+            controller.downloadAndDecryptAttachment(msg.id);
+          }
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Stack(
+            children: [
+              if (hasLocal)
+                Image.file(
+                  File(attachment.localPath!),
+                  width: 200,
+                  height: 200,
+                  fit: BoxFit.cover,
+                )
+              else
+                Container(
+                  width: 200,
+                  height: 200,
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.cloud_download_rounded,
+                          size: 32,
+                          color: isMe ? Colors.white70 : theme.colorScheme.primary,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tap to Decrypt Image',
+                          style: TextStyle(
+                            color: isMe ? Colors.white70 : theme.colorScheme.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatBytes(attachment.size),
+                          style: TextStyle(
+                            color: isMe ? Colors.white54 : Colors.grey,
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              Positioned.fill(child: progressOverlay()),
+            ],
+          ),
+        ),
+      );
+    } else {
+      final hasLocal = attachment.localPath != null &&
+          attachment.localPath!.isNotEmpty &&
+          File(attachment.localPath!).existsSync();
+
+      return GestureDetector(
+        onTap: () {
+          if (!hasLocal && attachment.status != 'uploading' && attachment.status != 'decrypting') {
+            controller.downloadAndDecryptAttachment(msg.id);
+          } else if (hasLocal) {
+            AppSnackBar.success(
+              title: 'Secure File Decrypted',
+              message: 'Saved at: ${attachment.localPath}',
+            );
+          }
+        },
+        child: Container(
+          width: 220,
+          padding: const EdgeInsets.all(AppSpacing.s12),
+          decoration: BoxDecoration(
+            color: Colors.black12,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Stack(
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    hasLocal ? Icons.insert_drive_file_rounded : Icons.lock_outline_rounded,
+                    size: 36,
+                    color: isMe ? Colors.white.withValues(alpha: 0.85) : theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          attachment.fileName ?? 'secure_document.bin',
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_formatBytes(attachment.size)} • ${hasLocal ? 'Decrypted' : 'Encrypted'}',
+                          style: TextStyle(
+                            color: isMe ? Colors.white60 : Colors.grey,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Positioned.fill(child: progressOverlay()),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB'];
+    var i = 0;
+    var d = bytes.toDouble();
+    while (d >= 1024 && i < suffixes.length - 1) {
+      d /= 1024;
+      i++;
+    }
+    return '${d.toStringAsFixed(1)} ${suffixes[i]}';
   }
 }
