@@ -8,6 +8,10 @@ import 'package:memovault/features/hidden/services/activation_trigger_service.da
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
 import 'package:memovault/features/hidden/services/pin_hashing_service.dart';
+import 'package:memovault/domain/messaging/services/r2_storage_service.dart';
+import 'package:memovault/data/messaging/services/r2_storage_service_impl.dart';
+import 'package:memovault/domain/messaging/services/media_transfer_service.dart';
+import 'package:memovault/data/messaging/services/media_transfer_service_impl.dart';
 
 class InitialBinding implements Bindings {
   @override
@@ -31,6 +35,16 @@ class InitialBinding implements Bindings {
         Get.find<DatabaseService>(),
         vaultService,
       ),
+      permanent: true,
+    );
+
+    // Register R2 storage and media transfer services
+    final r2Storage = Get.put<R2StorageService>(
+      R2StorageServiceImpl(),
+      permanent: true,
+    );
+    Get.put<MediaTransferService>(
+      MediaTransferServiceImpl(r2Storage, Get.find<MessagingRepository>()),
       permanent: true,
     );
   }

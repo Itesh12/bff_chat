@@ -54,6 +54,8 @@ abstract class MessagingRepository {
   Future<AttachmentEntity> insertAttachment(AttachmentEntity attachment);
   Future<void> updateAttachmentState(String id, String state);
   Future<void> updateAttachmentLocalPath(String id, String? localCachePath);
+  Future<void> updateAttachmentProgress(String id, int uploadedBytes, int totalBytes, String status);
+  Future<void> updateAttachmentRemotePaths(String id, String? remotePath, String? thumbnailPath);
 
   // ─── Sync Metadata ───────────────────────────────────────────────────────
   Future<String?> getSyncMetadata(String key);

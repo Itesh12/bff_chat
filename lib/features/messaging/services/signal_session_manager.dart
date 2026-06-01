@@ -9,6 +9,9 @@ import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/domain/messaging/message_entity.dart';
+import 'package:memovault/domain/messaging/attachment_entity.dart';
+import 'package:memovault/domain/messaging/attachment_type.dart';
+import 'package:memovault/core/crypto/media_cryptor.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/messaging/services/signal_store_impl.dart';
 import 'package:drift/drift.dart' hide isNull;
@@ -441,6 +444,8 @@ class SignalSessionManager {
     required String ciphertextHex,
     required int messageType,
     required String messageId,
+    Map<String, dynamic>? attachmentData,
+    String? incomingMessageType,
   }) async {
     final currentUid = Firebase.apps.isEmpty
         ? 'bob_uid'
@@ -462,9 +467,13 @@ class SignalSessionManager {
       kyberPreKeyStore: signalStore,
     );
 
-    final ciphertextBytes = _hexToBytes(ciphertextHex);
-
     // Sequence index / Replay protection validation (Point 3 & 4)
+    final hexToDecrypt = attachmentData != null 
+        ? attachmentData['keyRecipient'] as String 
+        : ciphertextHex;
+
+    final ciphertextBytes = _hexToBytes(hexToDecrypt);
+
     if (messageType == 2 || messageType == 3) {
       final Uint8List signalMsgBytes;
       if (messageType == 3) {
@@ -494,7 +503,40 @@ class SignalSessionManager {
     );
 
     final decryptedBytes = await sessionCipher.decrypt(senderAddress, signalMsg);
-    final decryptedText = String.fromCharCodes(decryptedBytes);
+    
+    final String decryptedText;
+    AttachmentEntity? localAttachment;
+
+    if (attachmentData != null) {
+      final hexMediaKey = _bytesToHex(decryptedBytes);
+      final attachmentId = attachmentData['id'] as String;
+      final fileName = attachmentData['fileName'] as String;
+      final mimeType = attachmentData['mimeType'] as String;
+      final size = attachmentData['size'] as int;
+      final remotePath = attachmentData['remotePath'] as String;
+      final thumbnailPath = attachmentData['thumbnailPath'] as String?;
+      final checksumSha256 = attachmentData['checksumSha256'] as String?;
+      final encryptionVersion = attachmentData['encryptionVersion'] as int? ?? 1;
+
+      localAttachment = AttachmentEntity(
+        id: attachmentId,
+        messageId: messageId,
+        type: AttachmentType.fromJson(incomingMessageType ?? 'file'),
+        fileName: fileName,
+        mimeType: mimeType,
+        size: size,
+        status: 'queued',
+        remotePath: remotePath,
+        thumbnailPath: thumbnailPath,
+        keyPayload: hexMediaKey,
+        checksumSha256: checksumSha256,
+        encryptionVersion: encryptionVersion,
+        createdAt: DateTime.now().toUtc(),
+      );
+      decryptedText = '[Media Attachment]';
+    } else {
+      decryptedText = String.fromCharCodes(decryptedBytes);
+    }
 
     // If we decrypted using a skipped key, delete it from the DB!
     if (messageType == 2 || messageType == 3) {
@@ -535,10 +577,14 @@ class SignalSessionManager {
       encryptedContent: decryptedText,
       nonce: '',
       state: 'delivered',
+      messageType: incomingMessageType ?? 'text',
       createdAt: DateTime.now().toUtc(),
     );
 
     await _messagingRepository.insertMessage(msg);
+    if (localAttachment != null) {
+      await _messagingRepository.insertAttachment(localAttachment);
+    }
     await _messagingRepository.updateConversationLastMessage(conversationId, messageId);
 
     // Increment unread count if the chat is not currently open
@@ -549,6 +595,154 @@ class SignalSessionManager {
       if (conv != null) {
         await _messagingRepository.updateConversationUnreadCount(conversationId, conv.unreadCount + 1);
       }
+    }
+  }
+
+  /// Encrypts and sends a secure E2EE media attachment message
+  Future<void> sendSecureMediaMessage({
+    required String targetUid,
+    required AttachmentEntity attachment,
+  }) async {
+    final currentUid = Firebase.apps.isEmpty
+        ? 'alice_uid'
+        : FirebaseAuth.instance.currentUser!.uid;
+
+    final conversationId = '${currentUid}_$targetUid';
+    final existingConv = await _messagingRepository.getConversationById(conversationId);
+    if (existingConv != null && existingConv.isBlocked) {
+      throw StateError('BLOCKED_CONTACT');
+    }
+
+    final isHidden = existingConv?.isHidden ?? true;
+    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
+    final bobAddress = ProtocolAddress(name: targetUid, deviceId: 1);
+    final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
+
+    if (!await signalStore.containsSession(bobAddress)) {
+      final participant = await _messagingRepository.getParticipantById(targetUid);
+      if (participant == null) throw Exception('Participant not found locally.');
+      final cleanUsername = participant.username.replaceAll('@', '');
+      await initiateSession(targetUsername: cleanUsername, isHidden: isHidden);
+    }
+
+    final sessionCipher = SessionCipher(
+      localAddress: localAddress,
+      sessionStore: signalStore,
+      identityKeyStore: signalStore,
+      preKeyStore: signalStore,
+      signedPreKeyStore: signalStore,
+      kyberPreKeyStore: signalStore,
+    );
+
+    // 1. Get raw Media Key
+    final hexMediaKey = attachment.keyPayload;
+    if (hexMediaKey == null || hexMediaKey.isEmpty) {
+      throw StateError('Attachment has no encryption key payload');
+    }
+    final rawMediaKey = _hexToBytes(hexMediaKey);
+
+    // 2. Encrypt Media Key for recipient via Double Ratchet session cipher
+    final ciphertextMessage = await sessionCipher.encrypt(bobAddress, rawMediaKey);
+    final keyRecipientHex = _bytesToHex(ciphertextMessage.ciphertext);
+    final recipientType = ciphertextMessage.type.value;
+
+    // 3. Encrypt Media Key for Compliance Escrow via X25519 ECIES
+    var compKeyHex = '03c3a9d7211bf5a3cfb403487053e1a6c0b9e830e0176cd1f1e847c2130dfa2e'; // default test key
+    var compKeyVersion = 1;
+
+    if (Firebase.apps.isNotEmpty) {
+      try {
+        final doc = await FirebaseFirestore.instance.collection('compliance').doc('config').get();
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data()!;
+          if (data['current'] != null) {
+            final currentData = data['current'] as Map<String, dynamic>;
+            compKeyHex = currentData['publicKey'] as String;
+            compKeyVersion = currentData['keyVersion'] as int;
+          }
+        }
+      } catch (e) {
+        AppLogger.warning('[SignalSessionManager] Failed to fetch current compliance key from Firestore: $e');
+      }
+    }
+
+    final escrowBlock = await MediaCryptor.encryptKeyForCompliance(rawMediaKey, compKeyHex);
+
+    // 4. Build message payload for Firestore
+    final messageId = attachment.messageId;
+    final messageData = {
+      'id': messageId,
+      'senderUid': currentUid,
+      'ciphertext': '', // empty for media type, payload in attachment
+      'type': recipientType,
+      'messageType': attachment.type.name,
+      'attachment': {
+        'id': attachment.id,
+        'fileName': attachment.fileName,
+        'mimeType': attachment.mimeType,
+        'size': attachment.size,
+        'remotePath': attachment.remotePath,
+        'thumbnailPath': attachment.thumbnailPath,
+        'checksumSha256': attachment.checksumSha256,
+        'encryptionVersion': attachment.encryptionVersion,
+        'keyRecipient': keyRecipientHex,
+        'keyEscrow': {
+          ...escrowBlock,
+          'keyVersion': compKeyVersion,
+        },
+      }
+    };
+
+    if (Firebase.apps.isEmpty && mockSyncQueues != null) {
+      mockSyncQueues!.putIfAbsent(targetUid, () => []).add(messageData);
+    } else {
+      final firestore = FirebaseFirestore.instance;
+      await firestore
+          .collection('sync_queues')
+          .doc(targetUid)
+          .collection('messages')
+          .doc(messageId)
+          .set({
+        ...messageData,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 5. Insert or update E2EE message locally
+    final localMsg = MessageEntity(
+      id: messageId,
+      conversationId: conversationId,
+      senderId: currentUid,
+      encryptedContent: '[Media Attachment]',
+      nonce: '',
+      state: 'sent',
+      messageType: attachment.type.name,
+      createdAt: DateTime.now().toUtc(),
+    );
+    
+    final existingMsg = await _messagingRepository.getMessageById(messageId);
+    if (existingMsg == null) {
+      await _messagingRepository.insertMessage(localMsg);
+    } else {
+      await _messagingRepository.updateMessageState(messageId, 'sent');
+    }
+    await _messagingRepository.updateConversationLastMessage(conversationId, messageId);
+
+    // Link or update the attachment locally
+    final finalAttachment = attachment.copyWith(messageId: messageId);
+    final existingAttachment = await _messagingRepository.getAttachmentById(finalAttachment.id);
+    if (existingAttachment == null) {
+      await _messagingRepository.insertAttachment(finalAttachment);
+    } else {
+      await _messagingRepository.updateAttachmentRemotePaths(
+        finalAttachment.id,
+        finalAttachment.remotePath,
+        finalAttachment.thumbnailPath,
+      );
+      await _messagingRepository.updateAttachmentState(
+        finalAttachment.id,
+        'completed',
+      );
     }
   }
 

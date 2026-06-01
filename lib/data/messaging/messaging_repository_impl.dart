@@ -171,6 +171,10 @@ class MessagingRepositoryImpl implements MessagingRepository {
       remotePath: row.remotePath,
       keyPayload: row.keyPayload,
       status: row.status,
+      uploadedBytes: row.uploadedBytes,
+      totalBytes: row.totalBytes,
+      encryptionVersion: row.encryptionVersion,
+      checksumSha256: row.checksumSha256,
       createdAt: row.createdAt,
     );
   }
@@ -188,6 +192,10 @@ class MessagingRepositoryImpl implements MessagingRepository {
       remotePath: row.remotePath,
       keyPayload: row.keyPayload,
       status: row.status,
+      uploadedBytes: row.uploadedBytes,
+      totalBytes: row.totalBytes,
+      encryptionVersion: row.encryptionVersion,
+      checksumSha256: row.checksumSha256,
       createdAt: row.createdAt,
     );
   }
@@ -763,6 +771,10 @@ class MessagingRepositoryImpl implements MessagingRepository {
         remotePath: Value(attachment.remotePath),
         keyPayload: Value(attachment.keyPayload),
         status: Value(attachment.status),
+        uploadedBytes: Value(attachment.uploadedBytes),
+        totalBytes: Value(attachment.totalBytes),
+        encryptionVersion: Value(attachment.encryptionVersion),
+        checksumSha256: Value(attachment.checksumSha256),
         createdAt: Value(attachment.createdAt),
       );
       await db.into(db.attachmentsTable).insert(privateCompanion);
@@ -780,6 +792,10 @@ class MessagingRepositoryImpl implements MessagingRepository {
         remotePath: Value(attachment.remotePath),
         keyPayload: Value(attachment.keyPayload),
         status: Value(attachment.status),
+        uploadedBytes: Value(attachment.uploadedBytes),
+        totalBytes: Value(attachment.totalBytes),
+        encryptionVersion: Value(attachment.encryptionVersion),
+        checksumSha256: Value(attachment.checksumSha256),
         createdAt: Value(attachment.createdAt),
       );
       await db.into(db.attachmentsTable).insert(publicCompanion);
@@ -829,6 +845,58 @@ class MessagingRepositoryImpl implements MessagingRepository {
       final db = _databaseService.db;
       final companion = AttachmentsTableCompanion(
         localPath: Value(localCachePath),
+      );
+      await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
+    }
+  }
+
+  @override
+  Future<void> updateAttachmentProgress(String id, int uploadedBytes, int totalBytes, String status) async {
+    final attach = await getAttachmentById(id);
+    if (attach == null) return;
+    final msg = await getMessageById(attach.messageId);
+    if (msg == null) return;
+    final isHidden = await _isConversationHidden(msg.conversationId);
+
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final companion = private_db.AttachmentsTableCompanion(
+        uploadedBytes: Value(uploadedBytes),
+        totalBytes: Value(totalBytes),
+        status: Value(status),
+      );
+      await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
+    } else {
+      final db = _databaseService.db;
+      final companion = AttachmentsTableCompanion(
+        uploadedBytes: Value(uploadedBytes),
+        totalBytes: Value(totalBytes),
+        status: Value(status),
+      );
+      await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
+    }
+  }
+
+  @override
+  Future<void> updateAttachmentRemotePaths(String id, String? remotePath, String? thumbnailPath) async {
+    final attach = await getAttachmentById(id);
+    if (attach == null) return;
+    final msg = await getMessageById(attach.messageId);
+    if (msg == null) return;
+    final isHidden = await _isConversationHidden(msg.conversationId);
+
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final companion = private_db.AttachmentsTableCompanion(
+        remotePath: Value(remotePath),
+        thumbnailPath: Value(thumbnailPath),
+      );
+      await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
+    } else {
+      final db = _databaseService.db;
+      final companion = AttachmentsTableCompanion(
+        remotePath: Value(remotePath),
+        thumbnailPath: Value(thumbnailPath),
       );
       await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
     }

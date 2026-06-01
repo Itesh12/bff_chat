@@ -3,10 +3,10 @@ import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
-
 import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
 import 'package:memovault/features/hidden/controllers/hidden_activation_controller.dart';
+import 'package:memovault/data/messaging/services/media_transfer_service_impl.dart';
 
 enum HiddenSessionState { locked, activating, active }
 
@@ -50,6 +50,7 @@ class HiddenSessionService extends GetxService with WidgetsBindingObserver {
     if (state.value != HiddenSessionState.locked) {
       state.value = HiddenSessionState.locked;
       _vaultService.lockVault();
+      MediaTransferServiceImpl.purgeDecryptedCache();
       AppLogger.info('[HiddenSessionService] Session locked.');
 
       // Auto-redirect out of hidden vault routes on lock

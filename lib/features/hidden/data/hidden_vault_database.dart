@@ -31,15 +31,15 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   HiddenVaultDatabase(super.e);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
-        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v7).');
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v8).');
         await m.createAll();
-        AppLogger.info('[HiddenVaultDatabase] Schema v7 created.');
+        AppLogger.info('[HiddenVaultDatabase] Schema v8 created.');
       },
       onUpgrade: (Migrator m, int from, int to) async {
         AppLogger.info('[HiddenVaultDatabase] Upgrading schema from v$from to v$to.');
@@ -88,6 +88,15 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
           await m.deleteTable('attachments');
           await m.createTable(attachmentsTable);
           AppLogger.info('[HiddenVaultDatabase] v7 migration: added draft, isPinned, searchIndex, and recreated attachments.');
+        }
+        if (from < 8) {
+          if (from == 7) {
+            await m.addColumn(attachmentsTable, attachmentsTable.uploadedBytes);
+            await m.addColumn(attachmentsTable, attachmentsTable.totalBytes);
+            await m.addColumn(attachmentsTable, attachmentsTable.encryptionVersion);
+            await m.addColumn(attachmentsTable, attachmentsTable.checksumSha256);
+            AppLogger.info('[HiddenVaultDatabase] v8 migration: added progress, versioning, and checksum to attachments.');
+          }
         }
       },
     );

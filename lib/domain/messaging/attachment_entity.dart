@@ -12,6 +12,10 @@ class AttachmentEntity {
   final String? remotePath;
   final String? keyPayload;
   final String status;
+  final int uploadedBytes;
+  final int totalBytes;
+  final int encryptionVersion;
+  final String? checksumSha256;
   final DateTime createdAt;
 
   const AttachmentEntity({
@@ -26,6 +30,10 @@ class AttachmentEntity {
     this.remotePath,
     this.keyPayload,
     required this.status,
+    this.uploadedBytes = 0,
+    this.totalBytes = 0,
+    this.encryptionVersion = 1,
+    this.checksumSha256,
     required this.createdAt,
   });
 
@@ -41,6 +49,10 @@ class AttachmentEntity {
     String? remotePath,
     String? keyPayload,
     String? status,
+    int? uploadedBytes,
+    int? totalBytes,
+    int? encryptionVersion,
+    String? checksumSha256,
     DateTime? createdAt,
   }) {
     return AttachmentEntity(
@@ -55,6 +67,10 @@ class AttachmentEntity {
       remotePath: remotePath ?? this.remotePath,
       keyPayload: keyPayload ?? this.keyPayload,
       status: status ?? this.status,
+      uploadedBytes: uploadedBytes ?? this.uploadedBytes,
+      totalBytes: totalBytes ?? this.totalBytes,
+      encryptionVersion: encryptionVersion ?? this.encryptionVersion,
+      checksumSha256: checksumSha256 ?? this.checksumSha256,
       createdAt: createdAt ?? this.createdAt,
     );
   }

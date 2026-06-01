@@ -5,6 +5,7 @@ abstract class R2StorageService {
     required File file,
     required String objectKey,
     required String mimeType,
+    void Function(int sentBytes, int totalBytes)? onProgress,
   });
 
   Future<void> deleteBlob({

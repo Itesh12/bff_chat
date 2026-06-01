@@ -88,6 +88,10 @@ class AttachmentsTable extends Table {
   TextColumn get remotePath => text().nullable()();
   TextColumn get keyPayload => text().nullable()(); // AES key encrypted with E2E session key
   TextColumn get status => text()(); // queued, uploading, completed, decrypting, failed
+  IntColumn get uploadedBytes => integer().withDefault(const Constant(0))();
+  IntColumn get totalBytes => integer().withDefault(const Constant(0))();
+  IntColumn get encryptionVersion => integer().withDefault(const Constant(1))();
+  TextColumn get checksumSha256 => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 
   @override
