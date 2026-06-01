@@ -15,6 +15,7 @@ import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/messaging/services/signal_session_manager.dart';
 import 'package:memovault/features/messaging/services/prekey_rotation_service.dart';
 import 'package:memovault/features/messaging/services/signal_sync_service.dart';
+import 'package:memovault/features/messaging/services/typing_and_presence_service.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 
 class HiddenBinding extends Bindings {
@@ -53,6 +54,13 @@ class HiddenBinding extends Bindings {
         Get.find<MessagingIdentityService>(),
         Get.find<MessagingRepository>(),
         Get.find<SecureStorageService>(),
+      ),
+      fenix: true,
+    );
+
+    Get.lazyPut<TypingAndPresenceService>(
+      () => TypingAndPresenceService(
+        Get.find<MessagingRepository>(),
       ),
       fenix: true,
     );

@@ -31,15 +31,15 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   HiddenVaultDatabase(super.e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
-        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v6).');
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v7).');
         await m.createAll();
-        AppLogger.info('[HiddenVaultDatabase] Schema v6 created.');
+        AppLogger.info('[HiddenVaultDatabase] Schema v7 created.');
       },
       onUpgrade: (Migrator m, int from, int to) async {
         AppLogger.info('[HiddenVaultDatabase] Upgrading schema from v$from to v$to.');
@@ -80,6 +80,14 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
           await m.createTable(signalOneTimePrekeysTable);
           await m.createTable(signalSkippedKeysTable);
           AppLogger.info('[HiddenVaultDatabase] v6 migration: added cryptographic tables.');
+        }
+        if (from >= 4 && from < 7) {
+          await m.addColumn(conversationsTable, conversationsTable.draft);
+          await m.addColumn(conversationsTable, conversationsTable.isPinned);
+          await m.addColumn(messagesTable, messagesTable.searchIndex);
+          await m.deleteTable('attachments');
+          await m.createTable(attachmentsTable);
+          AppLogger.info('[HiddenVaultDatabase] v7 migration: added draft, isPinned, searchIndex, and recreated attachments.');
         }
       },
     );

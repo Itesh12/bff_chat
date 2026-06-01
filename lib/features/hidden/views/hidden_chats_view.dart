@@ -51,6 +51,39 @@ class HiddenChatsView extends StatelessWidget {
     );
   }
 
+  Widget _buildFilterButton({
+    required BuildContext context,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? theme.colorScheme.primary.withValues(alpha: 0.15) 
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected 
+                ? theme.colorScheme.primary.withValues(alpha: 0.4) 
+                : theme.dividerColor.withValues(alpha: 0.05),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.labelLarge.copyWith(
+            color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = Get.find<HiddenMessagingController>();
@@ -74,6 +107,10 @@ class HiddenChatsView extends StatelessWidget {
         );
       }
 
+      final visibleConvs = controller.conversations
+          .where((c) => c.isArchived == controller.showArchived.value)
+          .toList();
+
       if (controller.conversations.isEmpty) {
         return AppEmptyState(
           customIcon: const Text(
@@ -87,156 +124,245 @@ class HiddenChatsView extends StatelessWidget {
         );
       }
 
-      return ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
-        itemCount: controller.conversations.length,
-        itemBuilder: (context, index) {
-          final conv = controller.conversations[index];
-          final participant = controller.participants[conv.participantId];
-
-          final String title = participant?.username ?? 'Connecting...';
-          final String subtitle = conv.lastMessageId != null
-              ? 'Secure message'
-              : 'End-to-End Session Active';
-
-          final timeStr = DateFormat('jm').format(conv.updatedAt.toLocal());
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.s12),
-            child: AppCard(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: 14.0),
-              onTap: () {
-                controller.onUserInteraction();
-                Get.toNamed(AppRoutes.hiddenChat, arguments: conv.id);
-              },
-              child: Row(
-                children: [
-                  // Glassmorphic secure avatar
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        title.isNotEmpty ? title.replaceAll('@', '').substring(0, 1).toUpperCase() : 'C',
-                        style: AppTypography.titleMedium.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const AppGap.h16(),
-
-                  // Text details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              title,
-                              style: AppTypography.bodyLarge.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              timeStr,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const AppGap.v4(),
-                        Row(
-                          children: [
-                            if (conv.isMuted) ...[
-                              Icon(Icons.volume_off_rounded, size: 13, color: theme.iconTheme.color?.withValues(alpha: 0.4)),
-                              const AppGap.h4(),
-                            ],
-                            if (conv.isBlocked) ...[
-                              Icon(Icons.block_flipped, size: 12, color: Colors.red.withValues(alpha: 0.6)),
-                              const AppGap.h4(),
-                            ],
-                            Expanded(
-                              child: Text(
-                                subtitle,
-                                style: AppTypography.bodyMedium.copyWith(
-                                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-                                  fontSize: 13,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const AppGap.h8(),
-
-                  // Actions menu button
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert_rounded, color: theme.iconTheme.color?.withValues(alpha: 0.5)),
-                    onSelected: (val) {
-                      if (val == 'mute') {
-                        controller.toggleMute(conv.id);
-                      } else if (val == 'archive') {
-                        controller.toggleArchive(conv.id);
-                      } else if (val == 'block') {
-                        controller.toggleBlock(conv.id);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'mute',
-                        child: Row(
-                          children: [
-                            Icon(conv.isMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded, size: 18),
-                            const AppGap.h8(),
-                            Text(conv.isMuted ? 'Unmute' : 'Mute'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'archive',
-                        child: Row(
-                          children: [
-                            Icon(conv.isArchived ? Icons.unarchive_outlined : Icons.archive_outlined, size: 18),
-                            const AppGap.h8(),
-                            Text(conv.isArchived ? 'Unarchive' : 'Archive'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'block',
-                        child: Row(
-                          children: [
-                            Icon(conv.isBlocked ? Icons.check_circle_outline : Icons.block_flipped, size: 18, color: Colors.red),
-                            const AppGap.h8(),
-                            Text(conv.isBlocked ? 'Unblock' : 'Block Contact', style: const TextStyle(color: Colors.red)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
+            child: Row(
+              children: [
+                _buildFilterButton(
+                  context: context,
+                  label: 'Active',
+                  isSelected: !controller.showArchived.value,
+                  onTap: () {
+                    controller.onUserInteraction();
+                    controller.showArchived.value = false;
+                  },
+                ),
+                const AppGap.h8(),
+                _buildFilterButton(
+                  context: context,
+                  label: 'Archived',
+                  isSelected: controller.showArchived.value,
+                  onTap: () {
+                    controller.onUserInteraction();
+                    controller.showArchived.value = true;
+                  },
+                ),
+              ],
             ),
-          );
-        },
+          ),
+          Expanded(
+            child: visibleConvs.isEmpty
+                ? AppEmptyState(
+                    customIcon: Text(
+                      controller.showArchived.value ? '📂' : '💬',
+                      style: const TextStyle(fontSize: 40),
+                    ),
+                    title: controller.showArchived.value ? 'No Archived Chats' : 'No Secure Chats',
+                    message: controller.showArchived.value 
+                        ? 'Conversations you archive will appear here.'
+                        : 'Start an E2EE conversation with a private pseudonym.',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: AppSpacing.s8),
+                    itemCount: visibleConvs.length,
+                    itemBuilder: (context, index) {
+                      final conv = visibleConvs[index];
+                      final participant = controller.participants[conv.participantId];
+
+                      final String displayName = (participant != null && participant.displayName.isNotEmpty)
+                          ? participant.displayName
+                          : (participant?.username ?? 'Connecting...');
+                      final String subtitle = conv.lastMessageId != null
+                          ? 'Secure message'
+                          : 'End-to-End Session Active';
+
+                      final timeStr = DateFormat('jm').format(conv.updatedAt.toLocal());
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.s12),
+                        child: AppCard(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s16, vertical: 14.0),
+                          onTap: () {
+                            controller.onUserInteraction();
+                            Get.toNamed(AppRoutes.hiddenChat, arguments: conv.id);
+                          },
+                          child: Row(
+                            children: [
+                              // Glassmorphic secure avatar
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    displayName.isNotEmpty ? displayName.replaceAll('@', '').substring(0, 1).toUpperCase() : 'C',
+                                    style: AppTypography.titleMedium.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const AppGap.h16(),
+
+                              // Text details
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            displayName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.bodyLarge.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        Text(
+                                          timeStr,
+                                          style: AppTypography.bodySmall.copyWith(
+                                            color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const AppGap.v4(),
+                                    Row(
+                                      children: [
+                                        if (conv.isMuted) ...[
+                                          Icon(Icons.volume_off_rounded, size: 13, color: theme.iconTheme.color?.withValues(alpha: 0.4)),
+                                          const AppGap.h4(),
+                                        ],
+                                        if (conv.isBlocked) ...[
+                                          Icon(Icons.block_flipped, size: 12, color: Colors.red.withValues(alpha: 0.6)),
+                                          const AppGap.h4(),
+                                        ],
+                                        if (conv.isPinned) ...[
+                                          Icon(Icons.push_pin_rounded, size: 12, color: theme.colorScheme.primary.withValues(alpha: 0.7)),
+                                          const AppGap.h4(),
+                                        ],
+                                        Expanded(
+                                          child: Text(
+                                            subtitle,
+                                            style: AppTypography.bodyMedium.copyWith(
+                                              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                                              fontSize: 13,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (conv.unreadCount > 0) ...[
+                                          const AppGap.h8(),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.primary,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 18,
+                                              minHeight: 18,
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                '${conv.unreadCount}',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const AppGap.h8(),
+
+                              // Actions menu button
+                              PopupMenuButton<String>(
+                                icon: Icon(Icons.more_vert_rounded, color: theme.iconTheme.color?.withValues(alpha: 0.5)),
+                                onSelected: (val) {
+                                  if (val == 'mute') {
+                                    controller.toggleMute(conv.id);
+                                  } else if (val == 'archive') {
+                                    controller.toggleArchive(conv.id);
+                                  } else if (val == 'block') {
+                                    controller.toggleBlock(conv.id);
+                                  } else if (val == 'pin') {
+                                    controller.togglePinned(conv.id);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  PopupMenuItem(
+                                    value: 'pin',
+                                    child: Row(
+                                      children: [
+                                        Icon(conv.isPinned ? Icons.push_pin_outlined : Icons.push_pin_rounded, size: 18),
+                                        const AppGap.h8(),
+                                        Text(conv.isPinned ? 'Unpin Chat' : 'Pin Chat'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'mute',
+                                    child: Row(
+                                      children: [
+                                        Icon(conv.isMuted ? Icons.volume_up_rounded : Icons.volume_off_rounded, size: 18),
+                                        const AppGap.h8(),
+                                        Text(conv.isMuted ? 'Unmute' : 'Mute'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'archive',
+                                    child: Row(
+                                      children: [
+                                        Icon(conv.isArchived ? Icons.unarchive_outlined : Icons.archive_outlined, size: 18),
+                                        const AppGap.h8(),
+                                        Text(conv.isArchived ? 'Unarchive' : 'Archive'),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'block',
+                                    child: Row(
+                                      children: [
+                                        Icon(conv.isBlocked ? Icons.check_circle_outline : Icons.block_flipped, size: 18, color: Colors.red),
+                                        const AppGap.h8(),
+                                        Text(conv.isBlocked ? 'Unblock' : 'Block Contact', style: const TextStyle(color: Colors.red)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       );
     });
   }

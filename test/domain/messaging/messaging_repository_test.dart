@@ -5,6 +5,7 @@ import 'package:memovault/core/services/database_service.dart';
 import 'package:memovault/core/storage/app_database.dart';
 import 'package:memovault/data/messaging/messaging_repository_impl.dart';
 import 'package:memovault/domain/messaging/attachment_entity.dart';
+import 'package:memovault/domain/messaging/attachment_type.dart';
 import 'package:memovault/domain/messaging/message_entity.dart';
 import 'package:memovault/domain/messaging/message_receipt_entity.dart';
 import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
@@ -131,24 +132,28 @@ void main() {
       expect(receipts.first.status, 'delivered');
 
       // 7. Add attachment
-      const attachment = AttachmentEntity(
+      final attachment = AttachmentEntity(
         id: 'a_1',
         messageId: 'm_1',
-        encryptedRemoteUrl: 'remote_url',
+        type: AttachmentType.file,
+        fileName: 'test.txt',
+        mimeType: 'text/plain',
+        size: 2048,
+        remotePath: 'remote_url',
         keyPayload: 'payload_key',
-        sizeBytes: 2048,
-        state: 'uploading',
+        status: 'uploading',
+        createdAt: now,
       );
       await repo.insertAttachment(attachment);
 
       final attachments = await repo.getAttachmentsForMessage('m_1');
       expect(attachments.length, 1);
-      expect(attachments.first.sizeBytes, 2048);
+      expect(attachments.first.size, 2048);
 
       // Update attachment local cache path
       await repo.updateAttachmentLocalPath('a_1', '/cache/path');
       final attachmentUpdated = await repo.getAttachmentById('a_1');
-      expect(attachmentUpdated!.localCachePath, '/cache/path');
+      expect(attachmentUpdated!.localPath, '/cache/path');
     });
 
     test('should securely separate and isolate hidden vault messaging threads', () async {

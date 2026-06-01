@@ -30,6 +30,8 @@ abstract class MessagingRepository {
   Future<void> toggleMuteConversation(String id);
   Future<void> toggleBlockConversation(String id);
   Future<void> toggleArchiveConversation(String id);
+  Future<void> updateConversationDraft(String id, String? draft);
+  Future<void> updateConversationPinnedState(String id, bool isPinned);
 
   // ─── Messages ────────────────────────────────────────────────────────────
   Stream<List<MessageEntity>> watchMessagesForConversation(String conversationId);
@@ -38,6 +40,8 @@ abstract class MessagingRepository {
   Future<MessageEntity> insertMessage(MessageEntity message);
   Future<void> updateMessageState(String id, String state);
   Future<void> deleteMessage(String id);
+  Future<void> clearChatHistory(String conversationId);
+  Future<List<MessageEntity>> searchLocalMessages(String query, {bool isHidden = false});
 
   // ─── Receipts ────────────────────────────────────────────────────────────
   Stream<List<MessageReceiptEntity>> watchReceiptsForMessage(String messageId);

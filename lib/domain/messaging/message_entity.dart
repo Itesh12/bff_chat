@@ -4,12 +4,13 @@ class MessageEntity {
   final String senderId;
   final String encryptedContent;
   final String nonce;
-  final String state; // pending, sending, sent, delivered, read, failed, expired
+  final String state; // queued, sending, sent, delivered, read, failed, expired
   final String messageType; // text, image, video, file, voice, system, handshake
   final bool isDeleted;
   final DateTime? deletedAt;
   final int version;
   final DateTime createdAt;
+  final String? searchIndex;
 
   const MessageEntity({
     required this.id,
@@ -23,6 +24,7 @@ class MessageEntity {
     this.deletedAt,
     this.version = 1,
     required this.createdAt,
+    this.searchIndex,
   });
 
   MessageEntity copyWith({
@@ -37,6 +39,7 @@ class MessageEntity {
     DateTime? deletedAt,
     int? version,
     DateTime? createdAt,
+    String? searchIndex,
   }) {
     return MessageEntity(
       id: id ?? this.id,
@@ -50,6 +53,7 @@ class MessageEntity {
       deletedAt: deletedAt ?? this.deletedAt,
       version: version ?? this.version,
       createdAt: createdAt ?? this.createdAt,
+      searchIndex: searchIndex ?? this.searchIndex,
     );
   }
 }

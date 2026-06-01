@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,7 +6,7 @@ import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 
 void main() {
   group('HiddenVaultDatabase Schema Migration Tests', () {
-    test('upgrades from v1 to v6 successfully and preserves data', () async {
+    test('upgrades from v1 to v7 successfully and preserves data', () async {
       // Create a temporary file for the test database
       final tempDir = Directory.systemTemp.createTempSync('memo_migration_test');
       final dbFile = File('${tempDir.path}/test_hidden_vault.db');
@@ -47,11 +46,11 @@ void main() {
       await executorv1.close();
 
       // 2. Open the database using our actual Drift class HiddenVaultDatabase
-      final executorv6 = NativeDatabase(dbFile);
-      final db = HiddenVaultDatabase(executorv6);
+      final executorv7 = NativeDatabase(dbFile);
+      final db = HiddenVaultDatabase(executorv7);
 
-      // 3. Assert schema version is 6
-      expect(db.schemaVersion, 6);
+      // 3. Assert schema version is 7
+      expect(db.schemaVersion, 7);
 
       // 5. Query all notes and verify they exist and have correct values
       final notes = await db.hiddenNotesDao.watchAllNotes().first;
@@ -80,7 +79,7 @@ void main() {
       await db.close();
     });
 
-    test('upgrades from v2 to v6 successfully, creates hidden_categories, messaging, and cryptographic tables', () async {
+    test('upgrades from v2 to v7 successfully, creates hidden_categories, messaging, and cryptographic tables', () async {
       // Create a temporary file for the test database
       final tempDir = Directory.systemTemp.createTempSync('memo_migration_v4_test');
       final dbFile = File('${tempDir.path}/test_hidden_vault.db');
@@ -119,11 +118,11 @@ void main() {
       await executorv2.close();
 
       // 2. Open using Drift class
-      final executorv6 = NativeDatabase(dbFile);
-      final db = HiddenVaultDatabase(executorv6);
+      final executorv7 = NativeDatabase(dbFile);
+      final db = HiddenVaultDatabase(executorv7);
 
-      // Assert schema version is 6
-      expect(db.schemaVersion, 6);
+      // Assert schema version is 7
+      expect(db.schemaVersion, 7);
 
       // Verify categories table is created and writable
       await db.customStatement("INSERT INTO hidden_categories (id, name, color_hex, display_order, created_at) VALUES ('cat_1', 'Work', 'FF0000', 0, 1680000000);");
@@ -147,7 +146,7 @@ void main() {
       await db.customStatement("INSERT INTO conversations (id, participant_id, last_message_id, updated_at, unread_count, is_hidden, is_archived, is_muted, is_blocked) VALUES ('c1', 'p1', NULL, 1680000000, 0, 1, 0, 0, 0);");
       await db.customStatement("INSERT INTO messages (id, conversation_id, sender_id, encrypted_content, nonce, state, created_at) VALUES ('m1', 'c1', 'p1', 'enc_data', 'nonce_val', 'sent', 1680000000);");
       await db.customStatement("INSERT INTO message_receipts (id, message_id, participant_id, status, timestamp) VALUES ('r1', 'm1', 'p1', 'read', 1680000000);");
-      await db.customStatement("INSERT INTO attachments (id, message_id, encrypted_remote_url, key_payload, local_cache_path, size_bytes, state) VALUES ('a1', 'm1', 'url', 'key', '/cache', 1024, 'completed');");
+      await db.customStatement("INSERT INTO attachments (id, message_id, type, file_name, mime_type, size, thumbnail_path, local_path, remote_path, key_payload, status, created_at) VALUES ('a1', 'm1', 'image', 'test.jpg', 'image/jpeg', 1024, NULL, '/cache', 'url', 'key', 'completed', 1680000000);");
       await db.customStatement("INSERT INTO sync_metadata (key, value, updated_at) VALUES ('last_sync', '1680000000', 1680000000);");
 
       // Verify cryptographic tables are created and writable
@@ -174,7 +173,7 @@ void main() {
 
       final attachRows = await db.customSelect('SELECT * FROM attachments').get();
       expect(attachRows.length, 1);
-      expect(attachRows.first.read<String>('encrypted_remote_url'), 'url');
+      expect(attachRows.first.read<String>('remote_path'), 'url');
 
       final metaRows = await db.customSelect('SELECT * FROM sync_metadata').get();
       expect(metaRows.length, 1);

@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:memovault/core/services/database_service.dart';
 import 'package:memovault/core/storage/app_database.dart';
 import 'package:memovault/domain/messaging/attachment_entity.dart';
+import 'package:memovault/domain/messaging/attachment_type.dart';
 import 'package:memovault/domain/messaging/conversation_entity.dart';
 import 'package:memovault/domain/messaging/message_entity.dart';
 import 'package:memovault/domain/messaging/message_receipt_entity.dart';
@@ -82,6 +83,8 @@ class MessagingRepositoryImpl implements MessagingRepository {
       isArchived: row.isArchived,
       isMuted: row.isMuted,
       isBlocked: row.isBlocked,
+      draft: row.draft,
+      isPinned: row.isPinned,
     );
   }
 
@@ -96,6 +99,8 @@ class MessagingRepositoryImpl implements MessagingRepository {
       isArchived: row.isArchived,
       isMuted: row.isMuted,
       isBlocked: row.isBlocked,
+      draft: row.draft,
+      isPinned: row.isPinned,
     );
   }
 
@@ -112,6 +117,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       deletedAt: row.deletedAt,
       version: row.version,
       createdAt: row.createdAt,
+      searchIndex: row.searchIndex,
     );
   }
 
@@ -128,6 +134,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
       deletedAt: row.deletedAt,
       version: row.version,
       createdAt: row.createdAt,
+      searchIndex: row.searchIndex,
     );
   }
 
@@ -155,11 +162,16 @@ class MessagingRepositoryImpl implements MessagingRepository {
     return AttachmentEntity(
       id: row.id,
       messageId: row.messageId,
-      encryptedRemoteUrl: row.encryptedRemoteUrl,
+      type: AttachmentType.fromJson(row.type),
+      fileName: row.fileName,
+      mimeType: row.mimeType,
+      size: row.size,
+      thumbnailPath: row.thumbnailPath,
+      localPath: row.localPath,
+      remotePath: row.remotePath,
       keyPayload: row.keyPayload,
-      localCachePath: row.localCachePath,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
+      status: row.status,
+      createdAt: row.createdAt,
     );
   }
 
@@ -167,11 +179,16 @@ class MessagingRepositoryImpl implements MessagingRepository {
     return AttachmentEntity(
       id: row.id,
       messageId: row.messageId,
-      encryptedRemoteUrl: row.encryptedRemoteUrl,
+      type: AttachmentType.fromJson(row.type),
+      fileName: row.fileName,
+      mimeType: row.mimeType,
+      size: row.size,
+      thumbnailPath: row.thumbnailPath,
+      localPath: row.localPath,
+      remotePath: row.remotePath,
       keyPayload: row.keyPayload,
-      localCachePath: row.localCachePath,
-      sizeBytes: row.sizeBytes,
-      state: row.state,
+      status: row.status,
+      createdAt: row.createdAt,
     );
   }
 
@@ -461,14 +478,14 @@ class MessagingRepositoryImpl implements MessagingRepository {
         if (isHidden) {
           final db = _getPrivateDb();
           return (db.select(db.messagesTable)
-            ..where((t) => t.conversationId.equals(conversationId))
+            ..where((t) => t.conversationId.equals(conversationId) & t.isDeleted.equals(false))
             ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
             .watch()
             .map((rows) => rows.map<MessageEntity>(_toMessageEntityFromPrivate).toList());
         } else {
           final db = _databaseService.db;
           return (db.select(db.messagesTable)
-            ..where((t) => t.conversationId.equals(conversationId))
+            ..where((t) => t.conversationId.equals(conversationId) & t.isDeleted.equals(false))
             ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
             .watch()
             .map((rows) => rows.map<MessageEntity>(_toMessageEntityFromPublic).toList());
@@ -477,7 +494,7 @@ class MessagingRepositoryImpl implements MessagingRepository {
     } else {
       final db = _databaseService.db;
       return (db.select(db.messagesTable)
-        ..where((t) => t.conversationId.equals(conversationId))
+        ..where((t) => t.conversationId.equals(conversationId) & t.isDeleted.equals(false))
         ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
         .watch()
         .map((rows) => rows.map<MessageEntity>(_toMessageEntityFromPublic).toList());
@@ -490,14 +507,14 @@ class MessagingRepositoryImpl implements MessagingRepository {
     if (isHidden) {
       final db = _getPrivateDb();
       final rows = await (db.select(db.messagesTable)
-        ..where((t) => t.conversationId.equals(conversationId))
+        ..where((t) => t.conversationId.equals(conversationId) & t.isDeleted.equals(false))
         ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
         .get();
       return rows.map<MessageEntity>(_toMessageEntityFromPrivate).toList();
     } else {
       final db = _databaseService.db;
       final rows = await (db.select(db.messagesTable)
-        ..where((t) => t.conversationId.equals(conversationId))
+        ..where((t) => t.conversationId.equals(conversationId) & t.isDeleted.equals(false))
         ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
         .get();
       return rows.map<MessageEntity>(_toMessageEntityFromPublic).toList();
@@ -527,41 +544,47 @@ class MessagingRepositoryImpl implements MessagingRepository {
 
     final isHidden = await _isConversationHidden(message.conversationId);
 
+    final normalizedIndex = message.searchIndex ??
+        (message.encryptedContent.isNotEmpty ? _normalizeForSearch(message.encryptedContent) : null);
+    final messageWithSearch = message.copyWith(searchIndex: normalizedIndex);
+
     if (isHidden) {
       final db = _getPrivateDb();
       final privateCompanion = private_db.MessagesTableCompanion(
-        id: Value(message.id),
-        conversationId: Value(message.conversationId),
-        senderId: Value(message.senderId),
-        encryptedContent: Value(message.encryptedContent),
-        nonce: Value(message.nonce),
-        state: Value(message.state),
-        messageType: Value(message.messageType),
-        isDeleted: Value(message.isDeleted),
-        deletedAt: Value(message.deletedAt),
-        version: Value(message.version),
-        createdAt: Value(message.createdAt),
+        id: Value(messageWithSearch.id),
+        conversationId: Value(messageWithSearch.conversationId),
+        senderId: Value(messageWithSearch.senderId),
+        encryptedContent: Value(messageWithSearch.encryptedContent),
+        nonce: Value(messageWithSearch.nonce),
+        state: Value(messageWithSearch.state),
+        messageType: Value(messageWithSearch.messageType),
+        isDeleted: Value(messageWithSearch.isDeleted),
+        deletedAt: Value(messageWithSearch.deletedAt),
+        version: Value(messageWithSearch.version),
+        createdAt: Value(messageWithSearch.createdAt),
+        searchIndex: Value(messageWithSearch.searchIndex),
       );
       await db.into(db.messagesTable).insert(privateCompanion);
     } else {
       final db = _databaseService.db;
       final publicCompanion = MessagesTableCompanion(
-        id: Value(message.id),
-        conversationId: Value(message.conversationId),
-        senderId: Value(message.senderId),
-        encryptedContent: Value(message.encryptedContent),
-        nonce: Value(message.nonce),
-        state: Value(message.state),
-        messageType: Value(message.messageType),
-        isDeleted: Value(message.isDeleted),
-        deletedAt: Value(message.deletedAt),
-        version: Value(message.version),
-        createdAt: Value(message.createdAt),
+        id: Value(messageWithSearch.id),
+        conversationId: Value(messageWithSearch.conversationId),
+        senderId: Value(messageWithSearch.senderId),
+        encryptedContent: Value(messageWithSearch.encryptedContent),
+        nonce: Value(messageWithSearch.nonce),
+        state: Value(messageWithSearch.state),
+        messageType: Value(messageWithSearch.messageType),
+        isDeleted: Value(messageWithSearch.isDeleted),
+        deletedAt: Value(messageWithSearch.deletedAt),
+        version: Value(messageWithSearch.version),
+        createdAt: Value(messageWithSearch.createdAt),
+        searchIndex: Value(messageWithSearch.searchIndex),
       );
       await db.into(db.messagesTable).insert(publicCompanion);
     }
 
-    return message;
+    return messageWithSearch;
   }
 
   @override
@@ -731,11 +754,16 @@ class MessagingRepositoryImpl implements MessagingRepository {
       final privateCompanion = private_db.AttachmentsTableCompanion(
         id: Value(attachment.id),
         messageId: Value(attachment.messageId),
-        encryptedRemoteUrl: Value(attachment.encryptedRemoteUrl),
+        type: Value(attachment.type.name),
+        fileName: Value(attachment.fileName),
+        mimeType: Value(attachment.mimeType),
+        size: Value(attachment.size),
+        thumbnailPath: Value(attachment.thumbnailPath),
+        localPath: Value(attachment.localPath),
+        remotePath: Value(attachment.remotePath),
         keyPayload: Value(attachment.keyPayload),
-        localCachePath: Value(attachment.localCachePath),
-        sizeBytes: Value(attachment.sizeBytes),
-        state: Value(attachment.state),
+        status: Value(attachment.status),
+        createdAt: Value(attachment.createdAt),
       );
       await db.into(db.attachmentsTable).insert(privateCompanion);
     } else {
@@ -743,11 +771,16 @@ class MessagingRepositoryImpl implements MessagingRepository {
       final publicCompanion = AttachmentsTableCompanion(
         id: Value(attachment.id),
         messageId: Value(attachment.messageId),
-        encryptedRemoteUrl: Value(attachment.encryptedRemoteUrl),
+        type: Value(attachment.type.name),
+        fileName: Value(attachment.fileName),
+        mimeType: Value(attachment.mimeType),
+        size: Value(attachment.size),
+        thumbnailPath: Value(attachment.thumbnailPath),
+        localPath: Value(attachment.localPath),
+        remotePath: Value(attachment.remotePath),
         keyPayload: Value(attachment.keyPayload),
-        localCachePath: Value(attachment.localCachePath),
-        sizeBytes: Value(attachment.sizeBytes),
-        state: Value(attachment.state),
+        status: Value(attachment.status),
+        createdAt: Value(attachment.createdAt),
       );
       await db.into(db.attachmentsTable).insert(publicCompanion);
     }
@@ -766,13 +799,13 @@ class MessagingRepositoryImpl implements MessagingRepository {
     if (isHidden) {
       final db = _getPrivateDb();
       final companion = private_db.AttachmentsTableCompanion(
-        state: Value(state),
+        status: Value(state),
       );
       await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
     } else {
       final db = _databaseService.db;
       final companion = AttachmentsTableCompanion(
-        state: Value(state),
+        status: Value(state),
       );
       await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
     }
@@ -789,13 +822,13 @@ class MessagingRepositoryImpl implements MessagingRepository {
     if (isHidden) {
       final db = _getPrivateDb();
       final companion = private_db.AttachmentsTableCompanion(
-        localCachePath: Value(localCachePath),
+        localPath: Value(localCachePath),
       );
       await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
     } else {
       final db = _databaseService.db;
       final companion = AttachmentsTableCompanion(
-        localCachePath: Value(localCachePath),
+        localPath: Value(localCachePath),
       );
       await (db.update(db.attachmentsTable)..where((t) => t.id.equals(id))).write(companion);
     }
@@ -1130,5 +1163,91 @@ class MessagingRepositoryImpl implements MessagingRepository {
             ..where((t) => t.senderId.equals(senderId) & t.ratchetKey.equals(ratchetKey) & t.sequenceNumber.equals(sequenceNumber)))
           .go();
     }
+  }
+
+  @override
+  Future<void> updateConversationDraft(String id, String? draft) async {
+    final isHidden = await _isConversationHidden(id);
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final companion = private_db.ConversationsTableCompanion(
+        draft: Value(draft),
+      );
+      await (db.update(db.conversationsTable)..where((t) => t.id.equals(id))).write(companion);
+    } else {
+      final db = _databaseService.db;
+      final companion = ConversationsTableCompanion(
+        draft: Value(draft),
+      );
+      await (db.update(db.conversationsTable)..where((t) => t.id.equals(id))).write(companion);
+    }
+  }
+
+  @override
+  Future<void> updateConversationPinnedState(String id, bool isPinned) async {
+    final isHidden = await _isConversationHidden(id);
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final companion = private_db.ConversationsTableCompanion(
+        isPinned: Value(isPinned),
+      );
+      await (db.update(db.conversationsTable)..where((t) => t.id.equals(id))).write(companion);
+    } else {
+      final db = _databaseService.db;
+      final companion = ConversationsTableCompanion(
+        isPinned: Value(isPinned),
+      );
+      await (db.update(db.conversationsTable)..where((t) => t.id.equals(id))).write(companion);
+    }
+  }
+
+  @override
+  Future<void> clearChatHistory(String conversationId) async {
+    final isHidden = await _isConversationHidden(conversationId);
+    final now = DateTime.now().toUtc();
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final companion = private_db.MessagesTableCompanion(
+        isDeleted: const Value(true),
+        deletedAt: Value(now),
+      );
+      await (db.update(db.messagesTable)
+            ..where((t) => t.conversationId.equals(conversationId)))
+          .write(companion);
+    } else {
+      final db = _databaseService.db;
+      final companion = MessagesTableCompanion(
+        isDeleted: const Value(true),
+        deletedAt: Value(now),
+      );
+      await (db.update(db.messagesTable)
+            ..where((t) => t.conversationId.equals(conversationId)))
+          .write(companion);
+    }
+  }
+
+  @override
+  Future<List<MessageEntity>> searchLocalMessages(String query, {bool isHidden = false}) async {
+    if (query.trim().isEmpty) return [];
+    final cleanQuery = '%${_normalizeForSearch(query)}%';
+    if (isHidden) {
+      final db = _getPrivateDb();
+      final rows = await (db.select(db.messagesTable)
+            ..where((t) => t.searchIndex.like(cleanQuery) & t.isDeleted.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
+          .get();
+      return rows.map<MessageEntity>(_toMessageEntityFromPrivate).toList();
+    } else {
+      final db = _databaseService.db;
+      final rows = await (db.select(db.messagesTable)
+            ..where((t) => t.searchIndex.like(cleanQuery) & t.isDeleted.equals(false))
+            ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)]))
+          .get();
+      return rows.map<MessageEntity>(_toMessageEntityFromPublic).toList();
+    }
+  }
+
+  String _normalizeForSearch(String text) {
+    return text.toLowerCase().replaceAll(RegExp(r"[^\w\s]"), "");
   }
 }

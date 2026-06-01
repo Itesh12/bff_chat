@@ -33,5 +33,22 @@ service cloud.firestore {
       allow read, delete: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null;
     }
+
+    // Presence Rules
+    match /presence/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Typing Rules
+    match /typing/{conversationId}/users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Read Receipts Rules
+    match /receipts/{receiptId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
