@@ -4,13 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:libsignal/libsignal.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide Value;
 import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/domain/messaging/message_entity.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/messaging/services/signal_store_impl.dart';
+import 'package:drift/drift.dart' hide isNull;
 
 class SignalSessionManager {
   final MessagingIdentityService _identityService;
@@ -193,7 +194,7 @@ class SignalSessionManager {
     );
 
     // 5. Initialize Local Signal Stores
-    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository);
+    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
     final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
     final bobAddress = ProtocolAddress(name: bobUid, deviceId: 1);
 
@@ -291,7 +292,7 @@ class SignalSessionManager {
         ? 'bob_uid'
         : FirebaseAuth.instance.currentUser!.uid;
 
-    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository);
+    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
     final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
     final senderAddress = ProtocolAddress(name: senderUid, deviceId: 1);
 
@@ -323,6 +324,19 @@ class SignalSessionManager {
     }
 
     final ciphertextBytes = _hexToBytes(ciphertextHex);
+
+    // Register initial sequence number for replay protection
+    try {
+      final signalMsgBytes = _extractWhisperMessageFromPreKeyMessage(ciphertextBytes);
+      if (signalMsgBytes != null) {
+        final signalMsgObj = SignalMessage.deserialize(data: signalMsgBytes);
+        final counter = signalMsgObj.counter();
+        final ratchetKey = _bytesToHex(signalMsgObj.senderRatchetKey());
+        await _messagingRepository.setSyncMetadata('max_seq:${senderUid}:${ratchetKey}', counter.toString());
+      }
+    } catch (e) {
+      AppLogger.error('[SignalSessionManager] Failed to extract handshake sequence number: $e');
+    }
 
     // Reconstruct CiphertextMessage
     final signalMsg = CiphertextMessage.fromRaw(
@@ -364,15 +378,25 @@ class SignalSessionManager {
       throw StateError('BLOCKED_CONTACT');
     }
 
-    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository);
+    final isHidden = existingConv?.isHidden ?? true;
+    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
     final bobAddress = ProtocolAddress(name: targetUid, deviceId: 1);
     final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
+
+    if (existingConv != null) {
+      final lastActive = existingConv.updatedAt;
+      final daysInactive = DateTime.now().toUtc().difference(lastActive).inDays;
+      if (daysInactive > 30) {
+        AppLogger.info('[SignalSessionManager] Session inactive for $daysInactive days (> 30 days). Rotating session.');
+        await signalStore.deleteSession(bobAddress);
+      }
+    }
 
     if (!await signalStore.containsSession(bobAddress)) {
       final participant = await _messagingRepository.getParticipantById(targetUid);
       if (participant == null) throw Exception('Participant not found locally.');
       final cleanUsername = participant.username.replaceAll('@', '');
-      await initiateSession(targetUsername: cleanUsername, isHidden: true);
+      await initiateSession(targetUsername: cleanUsername, isHidden: isHidden);
     }
 
     final sessionCipher = SessionCipher(
@@ -422,7 +446,10 @@ class SignalSessionManager {
         ? 'bob_uid'
         : FirebaseAuth.instance.currentUser!.uid;
 
-    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository);
+    final conversationId = '${currentUid}_$senderUid';
+    final existingConv = await _messagingRepository.getConversationById(conversationId);
+    final isHidden = existingConv?.isHidden ?? true;
+    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
     final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
     final senderAddress = ProtocolAddress(name: senderUid, deviceId: 1);
 
@@ -436,6 +463,31 @@ class SignalSessionManager {
     );
 
     final ciphertextBytes = _hexToBytes(ciphertextHex);
+
+    // Sequence index / Replay protection validation (Point 3 & 4)
+    if (messageType == 2 || messageType == 3) {
+      final Uint8List signalMsgBytes;
+      if (messageType == 3) {
+        final extracted = _extractWhisperMessageFromPreKeyMessage(ciphertextBytes);
+        if (extracted == null) {
+          throw StateError('Invalid PreKeySignalMessage format.');
+        }
+        signalMsgBytes = extracted;
+      } else {
+        signalMsgBytes = ciphertextBytes;
+      }
+
+      final signalMsg = SignalMessage.deserialize(data: signalMsgBytes);
+      final counter = signalMsg.counter();
+      final ratchetKey = _bytesToHex(signalMsg.senderRatchetKey());
+      await _enforceDoubleRatchetHardening(
+        senderId: senderUid,
+        ratchetKey: ratchetKey,
+        counter: counter,
+        isHidden: isHidden,
+      );
+    }
+
     final signalMsg = CiphertextMessage.fromRaw(
       messageType: messageType,
       ciphertext: ciphertextBytes,
@@ -444,8 +496,38 @@ class SignalSessionManager {
     final decryptedBytes = await sessionCipher.decrypt(senderAddress, signalMsg);
     final decryptedText = String.fromCharCodes(decryptedBytes);
 
+    // If we decrypted using a skipped key, delete it from the DB!
+    if (messageType == 2 || messageType == 3) {
+      final Uint8List signalMsgBytes;
+      if (messageType == 3) {
+        final extracted = _extractWhisperMessageFromPreKeyMessage(ciphertextBytes);
+        if (extracted != null) {
+          signalMsgBytes = extracted;
+          final signalMsgObj = SignalMessage.deserialize(data: signalMsgBytes);
+          final counter = signalMsgObj.counter();
+          final ratchetKey = _bytesToHex(signalMsgObj.senderRatchetKey());
+          await _messagingRepository.deleteSkippedKey(
+            senderUid,
+            ratchetKey,
+            counter,
+            isHidden,
+          );
+        }
+      } else {
+        signalMsgBytes = ciphertextBytes;
+        final signalMsgObj = SignalMessage.deserialize(data: signalMsgBytes);
+        final counter = signalMsgObj.counter();
+        final ratchetKey = _bytesToHex(signalMsgObj.senderRatchetKey());
+        await _messagingRepository.deleteSkippedKey(
+          senderUid,
+          ratchetKey,
+          counter,
+          isHidden,
+        );
+      }
+    }
+
     // Save message locally (Store-Before-Delete timing)
-    final conversationId = '${currentUid}_$senderUid';
     final msg = MessageEntity(
       id: messageId,
       conversationId: conversationId,
@@ -503,7 +585,7 @@ class SignalSessionManager {
     );
 
     // 2. Clear old session in store to force a clean re-handshake
-    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository);
+    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: true);
     final bobAddress = ProtocolAddress(name: bobUid, deviceId: 1);
     await signalStore.deleteSession(bobAddress);
 
@@ -524,17 +606,19 @@ class SignalSessionManager {
       if (oneTimePrekeys.length < 20) {
         AppLogger.info('[SignalSessionManager] [Mock] OTP count is ${oneTimePrekeys.length} (< 20). Replenishing...');
         final newOtpData = <Map<String, dynamic>>[];
-        final existingIds = await _identityService.getOneTimePreKeyIds();
+        final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: true);
+        final existingIds = await signalStore.getAllPreKeyIds();
         final int startId = existingIds.isEmpty ? 1 : (existingIds.reduce((a, b) => a > b ? a : b) + 1);
 
         for (int i = 0; i < 80; i++) {
           final id = startId + i;
           final keyPair = PrivateKey.generate();
-          await _identityService.saveOneTimePreKey(
+          final otRecord = PreKeyRecord(
             id: id,
-            privKeyHex: _bytesToHex(keyPair.serialize()),
-            pubKeyHex: _bytesToHex(keyPair.getPublicKey().serialize()),
+            publicKey: keyPair.getPublicKey(),
+            privateKey: keyPair,
           );
+          await signalStore.storePreKey(id, otRecord);
           newOtpData.add({
             'id': id,
             'publicKey': _bytesToHex(keyPair.getPublicKey().serialize()),
@@ -561,19 +645,21 @@ class SignalSessionManager {
         AppLogger.info('[SignalSessionManager] OTP count is ${oneTimePrekeys.length} (< 20). Replenishing...');
 
         final newOtpData = <Map<String, dynamic>>[];
-        final existingIds = await _identityService.getOneTimePreKeyIds();
+        final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: true);
+        final existingIds = await signalStore.getAllPreKeyIds();
         final int startId = existingIds.isEmpty ? 1 : (existingIds.reduce((a, b) => a > b ? a : b) + 1);
 
         for (int i = 0; i < 80; i++) {
           final id = startId + i;
           final keyPair = PrivateKey.generate();
-
-          // Save locally
-          await _identityService.saveOneTimePreKey(
+          final otRecord = PreKeyRecord(
             id: id,
-            privKeyHex: _bytesToHex(keyPair.serialize()),
-            pubKeyHex: _bytesToHex(keyPair.getPublicKey().serialize()),
+            publicKey: keyPair.getPublicKey(),
+            privateKey: keyPair,
           );
+
+          // Save locally in SQLCipher
+          await signalStore.storePreKey(id, otRecord);
 
           newOtpData.add({
             'id': id,
@@ -589,6 +675,113 @@ class SignalSessionManager {
       }
     } catch (e) {
       AppLogger.error('[SignalSessionManager] OTP replenishment failed: $e');
+    }
+  }
+
+  static Uint8List? _extractWhisperMessageFromPreKeyMessage(Uint8List preKeyBytes) {
+    if (preKeyBytes.isEmpty) return null;
+    int index = 1; // skip version/type byte
+    while (index < preKeyBytes.length) {
+      // Read key varint
+      int key = 0;
+      int shift = 0;
+      while (index < preKeyBytes.length) {
+        int b = preKeyBytes[index++];
+        key |= (b & 0x7F) << shift;
+        if ((b & 0x80) == 0) break;
+        shift += 7;
+      }
+      int tag = key >> 3;
+      int wireType = key & 0x7;
+
+      if (tag == 4 && wireType == 2) {
+        // Read length varint
+        int length = 0;
+        int lShift = 0;
+        while (index < preKeyBytes.length) {
+          int b = preKeyBytes[index++];
+          length |= (b & 0x7F) << lShift;
+          if ((b & 0x80) == 0) break;
+          lShift += 7;
+        }
+        if (index + length <= preKeyBytes.length) {
+          return Uint8List.sublistView(preKeyBytes, index, index + length);
+        }
+        return null;
+      } else {
+        // Skip field
+        if (wireType == 0) { // Varint
+          while (index < preKeyBytes.length) {
+            int b = preKeyBytes[index++];
+            if ((b & 0x80) == 0) break;
+          }
+        } else if (wireType == 1) { // 64-bit
+          index += 8;
+        } else if (wireType == 2) { // Length-delimited
+          int length = 0;
+          int lShift = 0;
+          while (index < preKeyBytes.length) {
+            int b = preKeyBytes[index++];
+            length |= (b & 0x7F) << lShift;
+            if ((b & 0x80) == 0) break;
+            lShift += 7;
+          }
+          index += length;
+        } else if (wireType == 5) { // 32-bit
+          index += 4;
+        } else {
+          // Unknown or group start/end, let's stop
+          break;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Validates sequence numbers, stores skipped keys, limits them to 100, and prevents replay attacks.
+  Future<void> _enforceDoubleRatchetHardening({
+    required String senderId,
+    required String ratchetKey,
+    required int counter,
+    required bool isHidden,
+  }) async {
+    final maxSeqStr = await _messagingRepository.getSyncMetadata('max_seq:${senderId}:${ratchetKey}');
+    final maxSeq = maxSeqStr != null ? int.parse(maxSeqStr) : -1;
+
+    if (counter <= maxSeq) {
+      // Check if skipped key exists
+      final exists = await _messagingRepository.checkSkippedKeyExists(
+        senderId,
+        ratchetKey,
+        counter,
+        isHidden,
+      );
+      if (!exists) {
+        throw StateError('REPLAYED_MESSAGE');
+      }
+    } else {
+      // Check if we skipped any sequence numbers
+      final skippedCount = counter - (maxSeq + 1);
+      if (skippedCount > 0) {
+        // Enforce the 100 skipped keys limit
+        final currentSkippedCount = await _messagingRepository.getSkippedKeysCount(senderId, isHidden);
+        if (currentSkippedCount + skippedCount > 100) {
+          throw StateError('Skipped keys limit exceeded. Potential DoS.');
+        }
+
+        // Insert skipped keys
+        for (int i = maxSeq + 1; i < counter; i++) {
+          await _messagingRepository.insertSkippedKey(
+            senderId,
+            ratchetKey,
+            i,
+            isHidden,
+          );
+        }
+      }
+
+      // Update max_seq
+      await _messagingRepository.setSyncMetadata('max_seq:${senderId}:${ratchetKey}', counter.toString());
     }
   }
 }

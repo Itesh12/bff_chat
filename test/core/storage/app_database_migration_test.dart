@@ -67,8 +67,8 @@ void main() {
       final executorv3 = NativeDatabase(dbFile);
       final db = AppDatabase(executorv3);
 
-      // Assert schema version is 4
-      expect(db.schemaVersion, 4);
+      // Assert schema version is 5
+      expect(db.schemaVersion, 5);
 
       // Verify category and note are preserved
       final catRows = await db.customSelect('SELECT * FROM categories').get();
@@ -87,6 +87,11 @@ void main() {
       await db.customStatement("INSERT INTO message_receipts (id, message_id, participant_id, status, timestamp) VALUES ('r1', 'm1', 'p1', 'delivered', 1680000000);");
       await db.customStatement("INSERT INTO attachments (id, message_id, encrypted_remote_url, key_payload, local_cache_path, size_bytes, state) VALUES ('a1', 'm1', 'remote_url', 'key', NULL, 2048, 'uploading');");
       await db.customStatement("INSERT INTO sync_metadata (key, value, updated_at) VALUES ('cursor', '100', 1680000000);");
+
+      // Verify new cryptographic tables are created and writable
+      await db.customStatement("INSERT INTO signal_sessions (address_name, device_id, session_record) VALUES ('alice_bob', 1, x'1234');");
+      await db.customStatement("INSERT INTO signal_one_time_prekeys (pre_key_id, pre_key_record) VALUES (1, x'5678');");
+      await db.customStatement("INSERT INTO signal_skipped_keys (sender_id, ratchet_key, sequence_number, key_bytes, created_at) VALUES ('p1', 'ratchet_key_hex', 10, x'90ab', 1680000000);");
 
       final partRows = await db.customSelect('SELECT * FROM participants').get();
       expect(partRows.length, 1);
@@ -112,6 +117,21 @@ void main() {
       final metaRows = await db.customSelect('SELECT * FROM sync_metadata').get();
       expect(metaRows.length, 1);
       expect(metaRows.first.read<String>('value'), '100');
+
+      final sessionRows = await db.customSelect('SELECT * FROM signal_sessions').get();
+      expect(sessionRows.length, 1);
+      expect(sessionRows.first.read<String>('address_name'), 'alice_bob');
+      expect(sessionRows.first.read<Uint8List>('session_record'), [0x12, 0x34]);
+
+      final otpRows = await db.customSelect('SELECT * FROM signal_one_time_prekeys').get();
+      expect(otpRows.length, 1);
+      expect(otpRows.first.read<int>('pre_key_id'), 1);
+      expect(otpRows.first.read<Uint8List>('pre_key_record'), [0x56, 0x78]);
+
+      final skippedRows = await db.customSelect('SELECT * FROM signal_skipped_keys').get();
+      expect(skippedRows.length, 1);
+      expect(skippedRows.first.read<String>('sender_id'), 'p1');
+      expect(skippedRows.first.read<Uint8List>('key_bytes'), [0x90, 0xab]);
 
       await db.close();
     });

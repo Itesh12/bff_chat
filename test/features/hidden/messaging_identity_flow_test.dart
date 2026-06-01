@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:libsignal/libsignal.dart';
@@ -9,6 +10,8 @@ import 'package:memovault/features/hidden/controllers/messaging_setup_controller
 import 'package:memovault/features/hidden/controllers/hidden_activation_controller.dart';
 import 'package:memovault/features/hidden/services/hidden_vault_service.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
+
+import 'package:memovault/domain/messaging/messaging_repository.dart';
 
 // Fake secure storage implementation
 class _FakeSecureStorageService implements SecureStorageService {
@@ -33,6 +36,38 @@ class _FakeSecureStorageService implements SecureStorageService {
   Future<void> clearAll() async {
     _data.clear();
   }
+}
+
+class _FakeMessagingRepository implements MessagingRepository {
+  final Map<int, Uint8List> _preKeys = {};
+
+  @override
+  Future<void> storePreKey(int preKeyId, Uint8List recordBytes, bool isHidden) async {
+    _preKeys[preKeyId] = recordBytes;
+  }
+
+  @override
+  Future<Uint8List?> loadPreKey(int preKeyId, bool isHidden) async {
+    return _preKeys[preKeyId];
+  }
+
+  @override
+  Future<bool> containsPreKey(int preKeyId, bool isHidden) async {
+    return _preKeys.containsKey(preKeyId);
+  }
+
+  @override
+  Future<void> removePreKey(int preKeyId, bool isHidden) async {
+    _preKeys.remove(preKeyId);
+  }
+
+  @override
+  Future<List<int>> getAllPreKeyIds(bool isHidden) async {
+    return _preKeys.keys.toList();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _FakeVaultService implements HiddenVaultService {
@@ -63,6 +98,7 @@ class _FakeSessionService implements HiddenSessionService {
 void main() {
   group('Messaging Identity Onboarding Flow Integration Tests', () {
     late _FakeSecureStorageService fakeStorage;
+    late _FakeMessagingRepository fakeRepo;
     late MessagingIdentityService identityService;
     late SeedRecoveryService seedRecoveryService;
     late MessagingSetupController controller;
@@ -74,6 +110,8 @@ void main() {
     setUp(() {
       fakeStorage = _FakeSecureStorageService();
       Get.put<SecureStorageService>(fakeStorage);
+      fakeRepo = _FakeMessagingRepository();
+      Get.put<MessagingRepository>(fakeRepo);
       identityService = MessagingIdentityServiceImpl(fakeStorage);
       seedRecoveryService = SeedRecoveryServiceImpl();
       controller = MessagingSetupController(identityService, seedRecoveryService);
@@ -82,6 +120,7 @@ void main() {
 
     tearDown(() {
       Get.delete<SecureStorageService>();
+      Get.delete<MessagingRepository>();
     });
 
     test('BIP-39 Mnemonic Seed generation derives exactly 12 valid words', () {
