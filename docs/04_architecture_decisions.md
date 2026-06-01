@@ -269,7 +269,11 @@ Packages using generation:
 | **Isar vs Hive** | Isar selected — see ADR-009 below |
 | **Offline-first for notes** | Cloud sync enabled — Local-first (Isar) → Firestore background sync |
 | **Folder structure `hidden/`** | Remains a feature subfolder; separate Dart package deferred to Phase 8 evaluation |
-| **Web admin panel** | No custom dashboard — Firebase Console + Admin SDK scripts only |
+| **Web admin panel** | Superseded by ADR-024 (Phase 4.9 Compliance & Admin Platform established) |
+| **Username Uniqueness** | Firestore-enforced Document ID uniqueness on normalized handles (ADR-021) |
+| **Conversation & Contact Lifecycle** | Decoupled Contact CRUD and conversation participant rules (ADR-022) |
+| **Session & Ratchet Storage** | Segregated Device Identity (SecureStorage) and Active Session data (SQLCipher) (ADR-023) |
+| **Compliance & Admin Decryption** | Dual-Security Model: local Hidden Vault private, messaging escrow-audited via X25519 ECIES (ADR-024) |
 
 ---
 
@@ -823,4 +827,79 @@ A key threat vector for a secure vault application is coercion (where the user i
 - Provides plausible deniability: The user can input the Panic PIN under duress, destroying the vault content without showing any error or warning messages.
 - Irreversible action: Once triggered, all vault notes, conversations, and attachments are permanently gone from the device. This requires recovery using the 12-word seed on a new/clean profile.
 - Restores baseline safety: Returns the app to a normal notes application state.
+
+---
+
+## ADR-021 — Username Uniqueness, Normalization, and Reservation
+
+**Status:** Accepted
+
+**Context:**
+MemoVault introduces a Secure Messaging system built around anonymous pseudonyms. When an identity is created, the user selects a unique handle. Impersonation, case variations, and reserve name spoofing could compromise the trust within closed circles.
+
+**Decision:**
+*   **Username Normalization**: Unicode NFKC normalization and lowercase conversion are enforced. The normalized lowercase handle serves as the Firestore Document ID under `/pseudonyms/{username}` ensuring case-insensitive database-level uniqueness.
+*   **Reserved Names Blacklist**: A hardcoded list (including `admin`, `system`, etc.) is blocked.
+*   **Immutability**: Usernames are immutable once registered.
+
+**Consequences:**
+*   Eliminates race conditions under high concurrent registration.
+*   Blocks visual homograph attacks and handle-based impersonation.
+
+---
+
+## ADR-022 — Conversation Model & Contact Lifecycle
+
+**Status:** Accepted
+
+**Context:**
+MemoVault needs a robust way to establish, track, and tear down secure communication channels (contacts and conversation threads) while ensuring cryptographic trust and physical database segregation.
+
+**Decision:**
+*   **Decoupled Model**: Contacts and Conversations are separate entities. A Contact represents cryptographic trust (e.g. Identity Key, trust level), while a Conversation tracks message flow.
+*   **Dual Data Sources**: Public chats are stored in `memovault.db` (SQLCipher public key), whereas Hidden chats are stored in `hidden_vault.db` (SQLCipher PIN key).
+*   **Contact Verification**: Out-of-band trust fingerprint verification is supported.
+
+**Consequences:**
+*   Maintains physical data isolation for hidden contacts and threads.
+*   Provides clear state transitions for connection request/accept/reject flows.
+
+---
+
+## ADR-023 — Session State & Ratchet Persistence Storage Split
+
+**Status:** Accepted
+
+**Context:**
+In Phase 4.3B, cryptographic session states, One-Time Prekeys, Signed Prekeys, and Kyber Prekeys were stored temporarily inside `SecureStorageService`. This splits the security boundary for the Hidden Vault, as active sessions are open in secure storage even if the local SQLCipher vault database is locked and inaccessible.
+
+**Decision:**
+Segregate cryptographic materials into two layers:
+1.  **Device Identity Layer (SecureStorage)**: Long-term Identity Private/Public Keys, Signed Prekeys, and Kyber Prekeys representing the physical device.
+2.  **Active Messaging Layer (SQLCipher DB)**: Session Records (Double Ratchet), One-Time Prekey inventories, and skipped message keys.
+
+**Consequences:**
+*   When the Hidden Vault is locked, all active session records are completely inaccessible.
+*   A Panic PIN trigger destroys the SQLCipher database, instantly wiping all active session credentials and histories.
+*   Incoming message syncing is blocked while the vault is locked.
+
+---
+
+## ADR-024 — Compliance Access & Administrative Decryption
+
+**Status:** Accepted
+
+**Context:**
+MemoVault is transitioning from a zero-knowledge private messaging app to a compliance-auditable communications platform. However, a pure compliance-access model conflicts with the primary value proposition of the Hidden Vault (which must remain fully private and local-only).
+
+**Decision:**
+Implement a dual-security model where:
+1.  **Hidden Vault** remains 100% private, local-only, and completely immune to compliance decryption.
+2.  **Messaging** is compliance-auditable via X25519 ECIES envelope encryption, where the Message Key (MK) is dual-encrypted for the recipient and the compliance public key.
+3.  **Audit Logging**: Every Level 2 access (decryption request) is recorded in an immutable, append-only audit trail log with Case ID, Reason, Accessor, and Timestamp.
+4.  **Key Management**: The Compliance Private Key is hosted locally in development and in Google Cloud KMS (HSM-backed) in production.
+
+**Consequences:**
+*   Meets enterprise auditing requirements for communications without sacrificing the local-only security of the Hidden Vault.
+*   Adds Phase 4.9 (Compliance & Admin Platform) to the roadmap, adjusting estimated completion to ≈ 80%.
 

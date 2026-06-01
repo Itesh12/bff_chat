@@ -25,12 +25,13 @@
 
 The application presents itself publicly as a **premium Notes / Vault application**.
 
-Underneath, it contains a **hidden, invite-only, end-to-end encrypted messaging system** accessible only through a secret activation mechanism unknown to casual users.
+Underneath, it contains a **hidden, invite-only, compliance-auditable private messaging system** alongside a **completely secure, local-only Hidden Vault**, accessible only through a secret activation mechanism unknown to casual users.
 
-This dual-purpose design is intentional and central to the product strategy:
+This design is intentional and central to the product strategy:
 
 - **Public Layer** → A polished, fully functional notes/vault app that justifies the app's existence on the device and on the App/Play Store.
-- **Hidden Layer** → A private, secure, real-time messaging platform accessible only to invited users who know the secret activation sequence.
+- **Hidden Vault** → A secure, local-only, coercion-resistant storage space with no administrative access, no cloud sync, and absolute privacy.
+- **Messaging System** → A private, compliance-auditable communications platform where message keys are dual-encrypted to support authorized administrative auditing.
 
 ---
 
@@ -65,8 +66,8 @@ This dual-purpose design is intentional and central to the product strategy:
 
 ### Security
 - **AES-256 encryption** — message and media encryption at rest
-- **Diffie-Hellman / ECDH** — key exchange for end-to-end encryption *(to be finalized in Phase 8)*
-- **Flutter Secure Storage** — cryptographic key storage
+- **Double Ratchet / ECDH & X25519 ECIES** — key exchange for messaging and compliance escrow envelope encryption
+- **Flutter Secure Storage** — cryptographic device identity key storage
 - **Biometric authentication** — device-level verification
 
 ### Local Storage
@@ -92,17 +93,16 @@ This dual-purpose design is intentional and central to the product strategy:
 | Phase | Title | Status |
 |---|---|---|
 | 0 | Product Foundation & Architecture | ✅ Complete |
-| 1 | Core Application Framework | 🟡 Planning |
-| 2 | Visible Notes Application | ⬜ Pending |
-| 3 | Hidden Access System | ⬜ Pending |
-| 4 | User Security Layer | ⬜ Pending |
-| 5 | Messaging Engine | ⬜ Pending |
-| 6 | Advanced Messaging | ⬜ Pending |
-| 7 | Media & Voice System | ⬜ Pending |
-| 8 | Privacy & Secret Features | ⬜ Pending |
-| 9 | Notifications & Background System | ⬜ Pending |
-| 10 | Premium Experience | ⬜ Pending |
-| 11 | Production Hardening | ⬜ Pending |
+| 1 | Core Application Framework | ✅ Complete |
+| 2 | Visible Notes Application | ✅ Complete |
+| 3 | Hidden Access System | ✅ Complete |
+| 4 | Secure Messaging Foundation & Hardening | ✅ Complete |
+| 4.5 | Messaging UX | 🟡 Active |
+| 4.6 | Encrypted Media (Cloudflare R2) | ⬜ Pending |
+| 4.7 | Voice Notes | ⬜ Pending |
+| 4.8 | Status / Moments | ⬜ Pending |
+| 4.9 | Compliance & Admin Platform | ⬜ Pending |
+| 5.0 | Production Hardening & Launch | ⬜ Pending |
 
 ---
 
@@ -129,9 +129,10 @@ This dual-purpose design is intentional and central to the product strategy:
 | **Notes sync** | Cloud sync enabled — Local-first (Isar) → Firestore background sync |
 | **Local database** | Isar (replaces Hive — see ADR-009 in `04_architecture_decisions.md`) |
 | **Expected users** | 2–10 production users; architecture targets 1,000 for scalability |
-| **Admin interface** | Firebase Console + Admin SDK scripts only (no custom dashboard) |
+| **Admin interface** | Phase 4.9 Compliance & Admin Platform (Level 1 metadata & Level 2 authorized KMS decryption with immutable audit logging) |
 | **Invite flow** | Manual invite codes only (Phase 4); QR onboarding deferred |
-| **Panic mode** | Shows fake vault + fake conversations — does NOT wipe local or cloud data |
+| **Panic mode** | Wipes local `hidden_vault.db` and active session records immediately (ADR-020, ADR-023) |
+| **Security Model** | Dual-Security: Private local Hidden Vault (no administrative access) and Compliance-Auditable Messaging (ADR-024) |
 | **Monetization** | Not applicable for initial release |
 | **Store accounts** | To be confirmed by team |
 | **Repository name** | `memovault` (internal naming neutral, no reference to messaging purpose) |

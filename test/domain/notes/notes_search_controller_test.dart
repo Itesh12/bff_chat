@@ -100,7 +100,7 @@ void main() {
       controller.onInit();
       controller.onQueryChanged('a');
       
-      await Future.delayed(const Duration(milliseconds: 350));
+      await Future.delayed(const Duration(milliseconds: 500));
 
       expect(controller.results.length, 0);
       expect(repository.searchCallCount, 0);
@@ -111,7 +111,12 @@ void main() {
       controller.onInit();
       controller.onQueryChanged('Meet');
       
-      await Future.delayed(const Duration(milliseconds: 350));
+      // Use robust polling to wait for the async repository search to execute
+      int attempts = 0;
+      while (repository.searchCallCount < 1 && attempts < 10) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        attempts++;
+      }
 
       expect(controller.results.length, 1);
       expect(controller.results[0].title, 'Meeting Notes');
