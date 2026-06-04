@@ -67,8 +67,8 @@ void main() {
       final executorv3 = NativeDatabase(dbFile);
       final db = AppDatabase(executorv3);
 
-      // Assert schema version is 7
-      expect(db.schemaVersion, 7);
+      // Assert schema version is 8
+      expect(db.schemaVersion, 8);
 
       // Verify category and note are preserved
       final catRows = await db.customSelect('SELECT * FROM categories').get();

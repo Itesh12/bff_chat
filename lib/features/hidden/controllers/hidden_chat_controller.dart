@@ -15,6 +15,8 @@ import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'package:memovault/domain/messaging/services/media_transfer_service.dart';
 import 'package:memovault/domain/messaging/attachment_entity.dart';
+import 'package:memovault/domain/messaging/services/audio_recorder_service.dart';
+import 'package:memovault/domain/messaging/services/audio_player_service.dart';
 import 'package:uuid/uuid.dart';
 
 class HiddenChatController extends GetxController {
@@ -23,10 +25,12 @@ class HiddenChatController extends GetxController {
   final String conversationId;
   final _uuid = const Uuid();
 
-  HiddenChatController(this._messagingRepository, this._sessionService, this.conversationId);
+  HiddenChatController(
+      this._messagingRepository, this._sessionService, this.conversationId);
 
   // Map of messageId to its attachment record
-  final RxMap<String, AttachmentEntity> attachments = <String, AttachmentEntity>{}.obs;
+  final RxMap<String, AttachmentEntity> attachments =
+      <String, AttachmentEntity>{}.obs;
 
   // Active progress tracking sets and timer
   final RxSet<String> activeTransferMessageIds = <String>{}.obs;
@@ -56,6 +60,25 @@ class HiddenChatController extends GetxController {
   final RxList<MessageEntity> searchResults = <MessageEntity>[].obs;
   final RxBool showJumpButton = false.obs;
 
+  // Voice Recording state
+  final RxBool isRecording = false.obs;
+  final RxBool isRecordingLocked = false.obs;
+  final RxBool isTextEmpty = true.obs;
+  final RxInt elapsedSeconds = 0.obs;
+  final RxList<double> liveAmplitudes = <double>[].obs;
+  Timer? _recordTimer;
+  StreamSubscription<double>? _amplitudeSubscription;
+
+  // Voice Playback state
+  final RxBool isPlaying = false.obs;
+  final Rx<Duration> playbackPosition = Duration.zero.obs;
+  final Rx<Duration> playbackDuration = Duration.zero.obs;
+  final RxnString activeAttachmentId = RxnString();
+  final RxDouble playbackSpeed = 1.0.obs;
+  StreamSubscription? _playerStateSubscription;
+  StreamSubscription? _playerPositionSubscription;
+  StreamSubscription? _playerDurationSubscription;
+
   @override
   void onInit() {
     super.onInit();
@@ -66,38 +89,60 @@ class HiddenChatController extends GetxController {
         showJumpButton.value = (maxScroll - offset) > 300;
       }
     });
+
+    final playerService = Get.find<AudioPlayerService>();
+    _playerStateSubscription = playerService.stateStream.listen((state) {
+      isPlaying.value = state == AudioPlayerState.playing;
+      if (state == AudioPlayerState.completed) {
+        playbackPosition.value = Duration.zero;
+      }
+    });
+    _playerPositionSubscription = playerService.positionStream.listen((pos) {
+      playbackPosition.value = pos;
+    });
+    _playerDurationSubscription = playerService.durationStream.listen((dur) {
+      playbackDuration.value = dur;
+    });
+
     bootstrapChat();
   }
 
   Future<void> bootstrapChat() async {
     try {
       // 1. Fetch conversation details to find participant
-      final conv = await _messagingRepository.getConversationById(conversationId);
+      final conv =
+          await _messagingRepository.getConversationById(conversationId);
       if (conv != null) {
-        final p = await _messagingRepository.getParticipantById(conv.participantId);
+        final p =
+            await _messagingRepository.getParticipantById(conv.participantId);
         otherParticipant.value = p;
 
         // Restore draft if any
         if (conv.draft != null && conv.draft!.isNotEmpty) {
           textController.text = conv.draft!;
+          isTextEmpty.value = false;
         }
 
         // Listen to presence and typing if participant resolved
         if (p != null) {
           final presenceService = Get.find<TypingAndPresenceService>();
           _presenceSubscription?.cancel();
-          _presenceSubscription = presenceService.watchUserPresence(p.id).listen((online) {
+          _presenceSubscription =
+              presenceService.watchUserPresence(p.id).listen((online) {
             isOtherOnline.value = online;
           });
 
           _typingSubscription?.cancel();
-          _typingSubscription = presenceService.watchTypingUsers(conversationId).listen((typingUids) {
+          _typingSubscription = presenceService
+              .watchTypingUsers(conversationId)
+              .listen((typingUids) {
             isOtherTyping.value = typingUids.contains(p.id);
           });
         }
 
         // Reset unread count since we are opening the thread
-        await _messagingRepository.updateConversationUnreadCount(conversationId, 0);
+        await _messagingRepository.updateConversationUnreadCount(
+            conversationId, 0);
       }
 
       // 2. Watch messages
@@ -112,7 +157,10 @@ class HiddenChatController extends GetxController {
 
         // Load attachments for all media messages
         for (final msg in data) {
-          if (msg.messageType == 'image' || msg.messageType == 'file' || msg.messageType == 'video') {
+          if (msg.messageType == 'image' ||
+              msg.messageType == 'file' ||
+              msg.messageType == 'video' ||
+              msg.messageType == 'voice') {
             await loadAttachmentsForMessage(msg.id);
           }
         }
@@ -133,13 +181,25 @@ class HiddenChatController extends GetxController {
     _typingSubscription?.cancel();
     _typingTimer?.cancel();
     _transferTimer?.cancel();
-    
+
+    _recordTimer?.cancel();
+    _amplitudeSubscription?.cancel();
+    _playerStateSubscription?.cancel();
+    _playerPositionSubscription?.cancel();
+    _playerDurationSubscription?.cancel();
+
+    try {
+      Get.find<AudioPlayerService>().stop();
+    } catch (_) {}
+
     // Save draft text on exit
     final draftText = textController.text.trim();
-    _messagingRepository.updateConversationDraft(conversationId, draftText.isEmpty ? null : draftText);
+    _messagingRepository.updateConversationDraft(
+        conversationId, draftText.isEmpty ? null : draftText);
 
     if (_isCurrentlyTyping) {
-      Get.find<TypingAndPresenceService>().setTypingState(conversationId, false);
+      Get.find<TypingAndPresenceService>()
+          .setTypingState(conversationId, false);
     }
 
     textController.dispose();
@@ -154,10 +214,12 @@ class HiddenChatController extends GetxController {
 
   void handleTextChanged(String val) {
     onUserInteraction();
+    isTextEmpty.value = val.trim().isEmpty;
     if (val.trim().isEmpty) {
       if (_isCurrentlyTyping) {
         _isCurrentlyTyping = false;
-        Get.find<TypingAndPresenceService>().setTypingState(conversationId, false);
+        Get.find<TypingAndPresenceService>()
+            .setTypingState(conversationId, false);
       }
       _typingTimer?.cancel();
       return;
@@ -172,7 +234,8 @@ class HiddenChatController extends GetxController {
     _typingTimer = Timer(const Duration(seconds: 4), () {
       if (_isCurrentlyTyping) {
         _isCurrentlyTyping = false;
-        Get.find<TypingAndPresenceService>().setTypingState(conversationId, false);
+        Get.find<TypingAndPresenceService>()
+            .setTypingState(conversationId, false);
       }
     });
   }
@@ -183,11 +246,14 @@ class HiddenChatController extends GetxController {
       searchResults.clear();
       return;
     }
-    final results = await _messagingRepository.searchLocalMessages(query, isHidden: true);
-    searchResults.assignAll(results.where((m) => m.conversationId == conversationId).toList());
+    final results =
+        await _messagingRepository.searchLocalMessages(query, isHidden: true);
+    searchResults.assignAll(
+        results.where((m) => m.conversationId == conversationId).toList());
   }
 
-  Future<void> _sendReadReceiptsForIncomingMessages(List<MessageEntity> messageList) async {
+  Future<void> _sendReadReceiptsForIncomingMessages(
+      List<MessageEntity> messageList) async {
     final other = otherParticipant.value;
     if (other == null) return;
     final presenceService = Get.find<TypingAndPresenceService>();
@@ -232,17 +298,20 @@ class HiddenChatController extends GetxController {
     if (p != null && p.trustState == 'revoked') {
       AppSnackBar.error(
         title: 'Security Warning',
-        message: 'Cannot send messages while the identity trust state is revoked.',
+        message:
+            'Cannot send messages while the identity trust state is revoked.',
       );
       return;
     }
 
     textController.clear();
-    
+    isTextEmpty.value = true;
+
     // Clear typing state immediately
     if (_isCurrentlyTyping) {
       _isCurrentlyTyping = false;
-      Get.find<TypingAndPresenceService>().setTypingState(conversationId, false);
+      Get.find<TypingAndPresenceService>()
+          .setTypingState(conversationId, false);
       _typingTimer?.cancel();
     }
 
@@ -253,7 +322,8 @@ class HiddenChatController extends GetxController {
       id: msgId,
       conversationId: conversationId,
       senderId: 'me', // Default ID for current local user in offline-first UI
-      encryptedContent: text, // Plaintext stored in physical local DB for Phase 4.3 Offline
+      encryptedContent:
+          text, // Plaintext stored in physical local DB for Phase 4.3 Offline
       nonce: 'nonce_${_uuid.v4().substring(0, 8)}',
       state: 'queued',
       createdAt: now,
@@ -261,7 +331,8 @@ class HiddenChatController extends GetxController {
 
     try {
       await _messagingRepository.insertMessage(msg);
-      await _messagingRepository.updateConversationLastMessage(conversationId, msgId);
+      await _messagingRepository.updateConversationLastMessage(
+          conversationId, msgId);
       _scrollToBottom();
 
       // Clear draft in DB
@@ -271,7 +342,8 @@ class HiddenChatController extends GetxController {
       await _messagingRepository.updateMessageState(msgId, 'sending');
 
       final identityService = Get.find<MessagingIdentityService>();
-      final isSecureReady = await identityService.getSetupState() == MessagingSetupState.ready;
+      final isSecureReady =
+          await identityService.getSetupState() == MessagingSetupState.ready;
 
       if (isSecureReady && p != null) {
         final sessionManager = Get.find<SignalSessionManager>();
@@ -327,7 +399,8 @@ class HiddenChatController extends GetxController {
 
   Future<void> loadAttachmentsForMessage(String messageId) async {
     try {
-      final list = await _messagingRepository.getAttachmentsForMessage(messageId);
+      final list =
+          await _messagingRepository.getAttachmentsForMessage(messageId);
       if (list.isNotEmpty) {
         attachments[messageId] = list.first;
       }
@@ -339,7 +412,8 @@ class HiddenChatController extends GetxController {
   void startTransferTracking(String messageId) {
     activeTransferMessageIds.add(messageId);
     if (_transferTimer == null || !_transferTimer!.isActive) {
-      _transferTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) async {
+      _transferTimer =
+          Timer.periodic(const Duration(milliseconds: 100), (timer) async {
         if (activeTransferMessageIds.isEmpty) {
           timer.cancel();
           _transferTimer = null;
@@ -348,7 +422,9 @@ class HiddenChatController extends GetxController {
         for (final msgId in activeTransferMessageIds.toList()) {
           await loadAttachmentsForMessage(msgId);
           final att = attachments[msgId];
-          if (att == null || att.status == 'completed' || att.status == 'failed') {
+          if (att == null ||
+              att.status == 'completed' ||
+              att.status == 'failed') {
             activeTransferMessageIds.remove(msgId);
           }
         }
@@ -374,7 +450,8 @@ class HiddenChatController extends GetxController {
     if (p != null && p.trustState == 'revoked') {
       AppSnackBar.error(
         title: 'Security Warning',
-        message: 'Cannot send messages while the identity trust state is revoked.',
+        message:
+            'Cannot send messages while the identity trust state is revoked.',
       );
       return;
     }
@@ -396,7 +473,8 @@ class HiddenChatController extends GetxController {
 
     try {
       await _messagingRepository.insertMessage(msg);
-      await _messagingRepository.updateConversationLastMessage(conversationId, msgId);
+      await _messagingRepository.updateConversationLastMessage(
+          conversationId, msgId);
       _scrollToBottom();
 
       // Start tracking progress immediately
@@ -414,7 +492,8 @@ class HiddenChatController extends GetxController {
       );
 
       final identityService = Get.find<MessagingIdentityService>();
-      final isSecureReady = await identityService.getSetupState() == MessagingSetupState.ready;
+      final isSecureReady =
+          await identityService.getSetupState() == MessagingSetupState.ready;
 
       if (isSecureReady && p != null) {
         final sessionManager = Get.find<SignalSessionManager>();
@@ -426,7 +505,8 @@ class HiddenChatController extends GetxController {
       } else {
         // Fallback for local/mock mode
         await _messagingRepository.updateMessageState(msgId, 'sent');
-        await _messagingRepository.updateAttachmentState(completedAttachment.id, 'completed');
+        await _messagingRepository.updateAttachmentState(
+            completedAttachment.id, 'completed');
       }
     } catch (e) {
       await _messagingRepository.updateMessageState(msgId, 'failed');
@@ -443,7 +523,9 @@ class HiddenChatController extends GetxController {
     final att = attachments[messageId];
     if (att == null) return;
 
-    if (att.status == 'completed' && att.localPath != null && att.localPath!.isNotEmpty) {
+    if (att.status == 'completed' &&
+        att.localPath != null &&
+        att.localPath!.isNotEmpty) {
       // Already downloaded and decrypted
       return;
     }
@@ -476,9 +558,255 @@ class HiddenChatController extends GetxController {
 
     final docFile = File('$tempDir/tax_statement.pdf');
     if (!docFile.existsSync()) {
-      await docFile.writeAsString('%PDF-1.4 ... Secure Vault Document Content ...');
+      await docFile
+          .writeAsString('%PDF-1.4 ... Secure Vault Document Content ...');
     }
 
     return [imgFile, docFile];
+  }
+
+  // ─── Voice Recording Methods ──────────────────────────────────────────────
+
+  Future<void> startRecording() async {
+    onUserInteraction();
+    final recorderService = Get.find<AudioRecorderService>();
+    final hasPerm = await recorderService.hasPermission();
+    if (!hasPerm) {
+      AppSnackBar.error(
+        title: 'Permission Required',
+        message: 'Microphone permission is required to record voice notes.',
+      );
+      return;
+    }
+
+    try {
+      // If currently playing a voice note, pause/stop it
+      Get.find<AudioPlayerService>().stop();
+
+      await recorderService.start();
+      isRecording.value = true;
+      elapsedSeconds.value = 0;
+      liveAmplitudes.clear();
+
+      _recordTimer?.cancel();
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        elapsedSeconds.value++;
+      });
+
+      _amplitudeSubscription?.cancel();
+      _amplitudeSubscription = recorderService.amplitudeStream.listen((amp) {
+        liveAmplitudes.add(amp);
+        // Keep only last 40 amplitudes for live feedback visualization
+        if (liveAmplitudes.length > 40) {
+          liveAmplitudes.removeAt(0);
+        }
+      });
+    } catch (e) {
+      isRecording.value = false;
+      AppLogger.error('Failed to start recording: $e');
+      AppSnackBar.error(
+        title: 'Recording Failed',
+        message: 'Could not initialize microphone: $e',
+      );
+    }
+  }
+
+  Future<void> stopRecording({required bool cancel}) async {
+    onUserInteraction();
+    if (!isRecording.value) return;
+
+    _recordTimer?.cancel();
+    _recordTimer = null;
+    _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
+
+    final recorderService = Get.find<AudioRecorderService>();
+    final result = await recorderService.stop();
+    isRecording.value = false;
+    elapsedSeconds.value = 0;
+    liveAmplitudes.clear();
+
+    if (cancel || result == null) {
+      if (result != null) {
+        try {
+          final file = File(result.path);
+          if (file.existsSync()) {
+            file.deleteSync();
+          }
+        } catch (_) {}
+      }
+      return;
+    }
+
+    await sendVoiceMessage(
+        File(result.path), result.durationSeconds, result.waveform);
+  }
+
+  Future<void> sendVoiceMessage(
+      File file, int duration, String waveform) async {
+    onUserInteraction();
+
+    // Contact Blocking Gate (Point 5)
+    final conv = await _messagingRepository.getConversationById(conversationId);
+    if (conv != null && conv.isBlocked) {
+      AppSnackBar.error(
+        title: 'Blocked Contact',
+        message: 'Cannot send messages to a blocked contact.',
+      );
+      return;
+    }
+
+    // Safety Warning / Trust Revoked Gate (Point 2)
+    final p = otherParticipant.value;
+    if (p != null && p.trustState == 'revoked') {
+      AppSnackBar.error(
+        title: 'Security Warning',
+        message:
+            'Cannot send messages while the identity trust state is revoked.',
+      );
+      return;
+    }
+
+    final msgId = 'm_${_uuid.v4()}';
+    final now = DateTime.now().toUtc();
+
+    final msg = MessageEntity(
+      id: msgId,
+      conversationId: conversationId,
+      senderId: 'me',
+      encryptedContent: '[Voice Note]',
+      nonce: 'nonce_${_uuid.v4().substring(0, 8)}',
+      state: 'queued',
+      messageType: 'voice',
+      createdAt: now,
+    );
+
+    try {
+      await _messagingRepository.insertMessage(msg);
+      await _messagingRepository.updateConversationLastMessage(
+          conversationId, msgId);
+      _scrollToBottom();
+
+      // Start tracking progress immediately
+      startTransferTracking(msgId);
+
+      // Move to sending
+      await _messagingRepository.updateMessageState(msgId, 'sending');
+
+      // Upload and encrypt
+      final transferService = Get.find<MediaTransferService>();
+      final baseAttachment = await transferService.uploadEncryptedFile(
+        messageId: msgId,
+        file: file,
+        fileType: 'audio/m4a',
+      );
+
+      final completedAttachment = baseAttachment.copyWith(
+        duration: duration,
+        waveform: waveform,
+      );
+
+      // Insert updated attachment row with duration/waveform
+      await _messagingRepository.insertAttachment(completedAttachment);
+
+      final identityService = Get.find<MessagingIdentityService>();
+      final isSecureReady =
+          await identityService.getSetupState() == MessagingSetupState.ready;
+
+      if (isSecureReady && p != null) {
+        final sessionManager = Get.find<SignalSessionManager>();
+        await sessionManager.sendSecureMediaMessage(
+          targetUid: p.id,
+          attachment: completedAttachment,
+        );
+        await _messagingRepository.updateMessageState(msgId, 'sent');
+      } else {
+        // Fallback for local/mock mode
+        await _messagingRepository.updateMessageState(msgId, 'sent');
+        await _messagingRepository.updateAttachmentState(
+            completedAttachment.id, 'completed');
+      }
+    } catch (e) {
+      await _messagingRepository.updateMessageState(msgId, 'failed');
+      AppLogger.error('Failed to send voice note: $e');
+      AppSnackBar.error(
+        title: 'Send Failed',
+        message: 'Failed to upload/send voice note: $e',
+      );
+    }
+  }
+
+  // ─── Voice Playback Methods ───────────────────────────────────────────────
+
+  Future<void> togglePlayVoiceNote(
+      String messageId, AttachmentEntity attachment) async {
+    onUserInteraction();
+    final playerService = Get.find<AudioPlayerService>();
+
+    if (activeAttachmentId.value == attachment.id) {
+      if (isPlaying.value) {
+        await playerService.pause();
+      } else {
+        await playerService.resume();
+      }
+      return;
+    }
+
+    // Tapped a different voice note or starting new playback
+    try {
+      await playerService.stop();
+      activeAttachmentId.value = attachment.id;
+      playbackPosition.value = Duration.zero;
+      playbackDuration.value = Duration(seconds: attachment.duration ?? 0);
+
+      // 1. Download and decrypt on-demand if local path is not present/valid
+      if (attachment.localPath == null ||
+          attachment.localPath!.isEmpty ||
+          !File(attachment.localPath!).existsSync()) {
+        await downloadAndDecryptAttachment(messageId);
+        // Refresh local cache path from DB
+        await loadAttachmentsForMessage(messageId);
+      }
+
+      final freshAttachment = attachments[messageId];
+      if (freshAttachment == null ||
+          freshAttachment.localPath == null ||
+          freshAttachment.localPath!.isEmpty) {
+        throw StateError('Decrypted local file path not resolved.');
+      }
+
+      await playerService.play(freshAttachment.localPath!);
+    } catch (e) {
+      AppLogger.error('Voice playback error: $e');
+      AppSnackBar.error(
+        title: 'Playback Error',
+        message: 'Could not play voice note: $e',
+      );
+    }
+  }
+
+  Future<void> togglePlaybackSpeed() async {
+    onUserInteraction();
+    final playerService = Get.find<AudioPlayerService>();
+    double nextSpeed = 1.0;
+    if (playbackSpeed.value == 1.0) {
+      nextSpeed = 1.5;
+    } else if (playbackSpeed.value == 1.5) {
+      nextSpeed = 2.0;
+    } else {
+      nextSpeed = 1.0;
+    }
+    playbackSpeed.value = nextSpeed;
+    await playerService.setSpeed(nextSpeed);
+  }
+
+  Future<void> seekPlayback(double progressFraction) async {
+    onUserInteraction();
+    final playerService = Get.find<AudioPlayerService>();
+    final totalMs = playbackDuration.value.inMilliseconds;
+    if (totalMs > 0) {
+      final targetMs = (totalMs * progressFraction).round();
+      await playerService.seek(Duration(milliseconds: targetMs));
+    }
   }
 }

@@ -9,6 +9,7 @@ import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'package:memovault/features/hidden/services/hidden_session_service.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
+import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/features/messaging/services/signal_session_manager.dart';
 import 'package:uuid/uuid.dart';
 
@@ -80,24 +81,43 @@ class HiddenMessagingController extends GetxController {
     final formattedUsername = '@$canonicalUsername';
 
     try {
-      // 1. Check if conversation already exists
-      final existingPart = await _messagingRepository.getParticipantByUsername(formattedUsername);
+      // 1. Check if conversation already exists (checking both username formats)
+      final existingPart = (await _messagingRepository.getParticipantByUsername(formattedUsername)) ??
+                           (await _messagingRepository.getParticipantByUsername(canonicalUsername));
       if (existingPart != null) {
-        final currentUid = Firebase.apps.isEmpty ? 'me' : (FirebaseAuth.instance.currentUser?.uid ?? 'me');
-        final conversationId = '${currentUid}_${existingPart.id}';
-        final existing = await _messagingRepository.getConversationById(conversationId);
+        // First try to find conversation in memory list
+        ConversationEntity? existing = conversations.firstWhereOrNull((c) => c.participantId == existingPart.id);
+        
+        // If not found in memory, check DB using the various possible prefix combinations
+        if (existing == null) {
+          final uids = [
+            Firebase.apps.isEmpty ? 'me' : (FirebaseAuth.instance.currentUser?.uid ?? 'me'),
+            Firebase.apps.isEmpty ? 'alice_uid' : (FirebaseAuth.instance.currentUser?.uid ?? 'alice_uid'),
+            Firebase.apps.isEmpty ? 'bob_uid' : (FirebaseAuth.instance.currentUser?.uid ?? 'bob_uid'),
+          ];
+          for (final uid in uids) {
+            final conv = await _messagingRepository.getConversationById('${uid}_${existingPart.id}');
+            if (conv != null) {
+              existing = conv;
+              break;
+            }
+          }
+        }
+
         if (existing != null) {
           AppSnackBar.info(
             title: 'Thread Exists',
             message: 'Opening existing conversation with $formattedUsername',
           );
+          Get.toNamed(AppRoutes.hiddenChat, arguments: existing.id);
           return;
         }
       }
 
-      // 2. If secure messaging is configured, do real X3DH initiateSession
+      // 2. If secure messaging is configured and Firebase is initialized, do real X3DH initiateSession
       final isSecureReady = await _identityService.getSetupState() == MessagingSetupState.ready;
-      if (isSecureReady) {
+      final canInitSecureSession = isSecureReady && (Firebase.apps.isNotEmpty || SignalSessionManager.mockPrekeyBundles != null);
+      if (canInitSecureSession) {
         final sessionManager = Get.find<SignalSessionManager>();
         
         AppSnackBar.info(
@@ -114,9 +134,21 @@ class HiddenMessagingController extends GetxController {
           title: 'Chat Created',
           message: 'Secure chat with $formattedUsername initiated.',
         );
+
+        // Fetch participant and navigate to the E2EE conversation room
+        final participant = (await _messagingRepository.getParticipantByUsername(formattedUsername)) ??
+                            (await _messagingRepository.getParticipantByUsername(canonicalUsername));
+        if (participant != null) {
+          final currentUid = Firebase.apps.isEmpty
+              ? 'alice_uid'
+              : (FirebaseAuth.instance.currentUser?.uid ?? 'alice_uid');
+          final conversationId = '${currentUid}_${participant.id}';
+          Get.toNamed(AppRoutes.hiddenChat, arguments: conversationId);
+        }
       } else {
         // Fallback for offline/local-only mode
-        var participant = await _messagingRepository.getParticipantByUsername(formattedUsername);
+        var participant = (await _messagingRepository.getParticipantByUsername(formattedUsername)) ??
+                          (await _messagingRepository.getParticipantByUsername(canonicalUsername));
         if (participant == null) {
           final pId = 'p_${_uuid.v4()}';
           participant = await _messagingRepository.createOrUpdateParticipant(
@@ -137,6 +169,8 @@ class HiddenMessagingController extends GetxController {
           title: 'Chat Created',
           message: 'Secure chat with $formattedUsername initiated.',
         );
+
+        Get.toNamed(AppRoutes.hiddenChat, arguments: convId);
       }
     } catch (e) {
       if (e.toString().contains('IDENTITY_KEY_CHANGED')) {

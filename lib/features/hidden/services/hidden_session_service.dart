@@ -7,6 +7,7 @@ import 'package:memovault/core/routes/app_routes.dart';
 import 'package:memovault/features/hidden/controllers/hidden_home_controller.dart';
 import 'package:memovault/features/hidden/controllers/hidden_activation_controller.dart';
 import 'package:memovault/data/messaging/services/media_transfer_service_impl.dart';
+import 'package:memovault/domain/messaging/services/audio_player_service.dart';
 
 enum HiddenSessionState { locked, activating, active }
 
@@ -50,6 +51,11 @@ class HiddenSessionService extends GetxService with WidgetsBindingObserver {
     if (state.value != HiddenSessionState.locked) {
       state.value = HiddenSessionState.locked;
       _vaultService.lockVault();
+      try {
+        Get.find<AudioPlayerService>().stop();
+      } catch (e) {
+        // Ignored if service not initialized yet
+      }
       MediaTransferServiceImpl.purgeDecryptedCache();
       AppLogger.info('[HiddenSessionService] Session locked.');
 
