@@ -5,19 +5,18 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/core/crypto/media_cryptor.dart';
-import 'package:memovault/data/messaging/services/r2_storage_service_impl.dart';
 import 'package:memovault/domain/messaging/attachment_entity.dart';
 import 'package:memovault/domain/messaging/attachment_type.dart';
 import 'package:memovault/domain/messaging/services/media_transfer_service.dart';
-import 'package:memovault/domain/messaging/services/r2_storage_service.dart';
+import 'package:memovault/domain/messaging/services/media_storage_service.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
 import 'dart:typed_data';
 
 class MediaTransferServiceImpl implements MediaTransferService {
-  final R2StorageService _r2storageService;
+  final MediaStorageService _mediaStorageService;
   final MessagingRepository _messagingRepository;
 
-  MediaTransferServiceImpl(this._r2storageService, this._messagingRepository);
+  MediaTransferServiceImpl(this._mediaStorageService, this._messagingRepository);
 
   static Future<Directory> get _decryptedCacheDirectory async {
     final tempDir = await getTemporaryDirectory();
@@ -48,7 +47,7 @@ class MediaTransferServiceImpl implements MediaTransferService {
     required File file,
     required String fileType,
   }) async {
-    final attachmentId = const Uuid().v4();
+    final attachmentId = const Uuid().v4().replaceAll('-', '');
     final originalBytes = await file.readAsBytes();
     final totalSize = originalBytes.length;
 
@@ -103,7 +102,7 @@ class MediaTransferServiceImpl implements MediaTransferService {
     // 5. Upload thumbnail if present
     String? remoteThumbnailPath;
     if (encryptedThumbnailBytes != null) {
-      final thumbnailKey = 'thumbnails/$attachmentId.enc';
+      final thumbnailKey = 'thumbnails/$attachmentId';
       final tempThumbFile = File('${Directory.systemTemp.path}/$thumbnailKey');
       if (!tempThumbFile.parent.existsSync()) {
         tempThumbFile.parent.createSync(recursive: true);
@@ -111,7 +110,7 @@ class MediaTransferServiceImpl implements MediaTransferService {
       await tempThumbFile.writeAsBytes(encryptedThumbnailBytes);
       
       try {
-        remoteThumbnailPath = await _r2storageService.uploadBlob(
+        remoteThumbnailPath = await _mediaStorageService.uploadBlob(
           file: tempThumbFile,
           objectKey: thumbnailKey,
           mimeType: 'application/octet-stream',
@@ -124,7 +123,7 @@ class MediaTransferServiceImpl implements MediaTransferService {
     }
 
     // 6. Upload original encrypted file with progress tracking
-    final originalKey = 'attachments/$attachmentId.enc';
+    final originalKey = 'attachments/$attachmentId';
     final tempOriginalFile = File('${Directory.systemTemp.path}/$originalKey');
     if (!tempOriginalFile.parent.existsSync()) {
       tempOriginalFile.parent.createSync(recursive: true);
@@ -140,7 +139,7 @@ class MediaTransferServiceImpl implements MediaTransferService {
         'uploading',
       );
 
-      remotePath = await _r2storageService.uploadBlob(
+      remotePath = await _mediaStorageService.uploadBlob(
         file: tempOriginalFile,
         objectKey: originalKey,
         mimeType: 'application/octet-stream',
@@ -221,7 +220,7 @@ class MediaTransferServiceImpl implements MediaTransferService {
     final tempEncFile = File('${Directory.systemTemp.path}/download_${attachment.id}.enc');
     try {
       // 1. Download encrypted blob to temporary file
-      await R2StorageServiceImpl.downloadBlobToLocalFile(
+      await _mediaStorageService.downloadBlobToLocalFile(
         remoteUrl: remotePath,
         destinationFile: tempEncFile,
       );
