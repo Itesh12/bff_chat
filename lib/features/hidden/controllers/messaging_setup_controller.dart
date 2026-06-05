@@ -159,6 +159,10 @@ class MessagingSetupController extends GetxController {
 
     if (Firebase.apps.isNotEmpty) {
       try {
+        final auth = FirebaseAuth.instance;
+        if (auth.currentUser == null) {
+          await auth.signInAnonymously();
+        }
         final doc = await FirebaseFirestore.instance
             .collection('pseudonyms')
             .doc(normalized)
