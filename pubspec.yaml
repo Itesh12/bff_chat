@@ -29,6 +29,8 @@ dependencies:
       url: https://github.com/djx-y-z/libsignal_dart.git
   cloud_firestore: ^5.4.4
   firebase_auth: ^5.3.1
+  record: ^5.1.2
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:

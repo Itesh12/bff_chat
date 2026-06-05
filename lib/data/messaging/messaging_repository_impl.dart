@@ -175,6 +175,8 @@ class MessagingRepositoryImpl implements MessagingRepository {
       totalBytes: row.totalBytes,
       encryptionVersion: row.encryptionVersion,
       checksumSha256: row.checksumSha256,
+      duration: row.duration,
+      waveform: row.waveform,
       createdAt: row.createdAt,
     );
   }
@@ -196,6 +198,8 @@ class MessagingRepositoryImpl implements MessagingRepository {
       totalBytes: row.totalBytes,
       encryptionVersion: row.encryptionVersion,
       checksumSha256: row.checksumSha256,
+      duration: row.duration,
+      waveform: row.waveform,
       createdAt: row.createdAt,
     );
   }
@@ -775,9 +779,11 @@ class MessagingRepositoryImpl implements MessagingRepository {
         totalBytes: Value(attachment.totalBytes),
         encryptionVersion: Value(attachment.encryptionVersion),
         checksumSha256: Value(attachment.checksumSha256),
+        duration: Value(attachment.duration),
+        waveform: Value(attachment.waveform),
         createdAt: Value(attachment.createdAt),
       );
-      await db.into(db.attachmentsTable).insert(privateCompanion);
+      await db.into(db.attachmentsTable).insertOnConflictUpdate(privateCompanion);
     } else {
       final db = _databaseService.db;
       final publicCompanion = AttachmentsTableCompanion(
@@ -796,9 +802,11 @@ class MessagingRepositoryImpl implements MessagingRepository {
         totalBytes: Value(attachment.totalBytes),
         encryptionVersion: Value(attachment.encryptionVersion),
         checksumSha256: Value(attachment.checksumSha256),
+        duration: Value(attachment.duration),
+        waveform: Value(attachment.waveform),
         createdAt: Value(attachment.createdAt),
       );
-      await db.into(db.attachmentsTable).insert(publicCompanion);
+      await db.into(db.attachmentsTable).insertOnConflictUpdate(publicCompanion);
     }
 
     return attachment;

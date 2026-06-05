@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:memovault/core/config/env_config.dart';
 import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/domain/messaging/services/r2_storage_service.dart';
@@ -50,11 +53,10 @@ class R2StorageServiceImpl implements R2StorageService {
     // Production / Staging Profile: Fetch presigned URL and PUT blob
     AppLogger.info('[R2StorageService] Fetching presigned upload URL for key: $objectKey');
     
-    // Note: The presigned URL must be generated via a secure backend function/worker.
-    // Here we outline the client execution flow.
     final presignedUrl = await _fetchPresignedUploadUrl(objectKey);
 
     final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
     try {
       final request = await client.putUrl(Uri.parse(presignedUrl));
       request.headers.contentType = ContentType.parse(mimeType);
@@ -98,15 +100,30 @@ class R2StorageServiceImpl implements R2StorageService {
       return;
     }
 
-    final presignedDeleteUrl = await _fetchPresignedDeleteUrl(objectKey);
+    AppLogger.info('[R2StorageService] Deleting blob via worker for key: $objectKey');
     final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.deleteUrl(Uri.parse(presignedDeleteUrl));
+      final uri = Uri.parse('${EnvConfig.r2WorkerBaseUrl}/delete');
+      final request = await client.postUrl(uri);
+      request.headers.contentType = ContentType.json;
+
+      if (Firebase.apps.isNotEmpty) {
+        final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+        if (idToken != null) {
+          request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
+        }
+      }
+
+      final bodyBytes = utf8.encode(jsonEncode({'key': objectKey}));
+      request.contentLength = bodyBytes.length;
+      request.add(bodyBytes);
+
       final response = await request.close();
       if (response.statusCode != HttpStatus.ok && response.statusCode != HttpStatus.noContent) {
         throw HttpException(
-          'Failed to delete blob from R2. HTTP Status: ${response.statusCode}',
-          uri: Uri.parse(presignedDeleteUrl),
+          'Failed to delete blob from R2 via worker. HTTP Status: ${response.statusCode}',
+          uri: uri,
         );
       }
     } finally {
@@ -114,20 +131,78 @@ class R2StorageServiceImpl implements R2StorageService {
     }
   }
 
-  // ─── Help Helpers for Mock/Presigned URL Resolves ────────────────────────
+  // ─── Helpers for Mock/Presigned URL Resolves ────────────────────────
 
-  Future<String> _fetchPresignedUploadUrl(String objectKey) async {
-    // In staging/production, make a secure HTTP request to your Cloudflare Worker / backend
-    // to retrieve a presigned PUT URL. For demonstration:
-    return 'https://media-api.memovault.com/presigned-put/$objectKey';
+  static Future<String> _fetchPresignedUploadUrl(String objectKey) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
+    try {
+      final uri = Uri.parse('${EnvConfig.r2WorkerBaseUrl}/presigned-put?key=$objectKey');
+      final request = await client.getUrl(uri);
+      
+      if (Firebase.apps.isNotEmpty) {
+        final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+        if (idToken != null) {
+          request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
+        }
+      }
+      
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        throw HttpException(
+          'Failed to fetch presigned upload URL from worker. HTTP Status: ${response.statusCode}',
+          uri: uri,
+        );
+      }
+      
+      final body = await response.transform(const Utf8Decoder()).join();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final url = data['url'] as String?;
+      if (url == null) {
+        throw const HttpException('Presigned URL response did not contain "url" key');
+      }
+      return url;
+    } finally {
+      client.close();
+    }
   }
 
-  Future<String> _fetchPresignedDeleteUrl(String objectKey) async {
-    return 'https://media-api.memovault.com/presigned-delete/$objectKey';
+  static Future<String> _fetchPresignedDownloadUrl(String objectKey) async {
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
+    try {
+      final uri = Uri.parse('${EnvConfig.r2WorkerBaseUrl}/presigned-get?key=$objectKey');
+      final request = await client.getUrl(uri);
+      
+      if (Firebase.apps.isNotEmpty) {
+        final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+        if (idToken != null) {
+          request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
+        }
+      }
+      
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        throw HttpException(
+          'Failed to fetch presigned download URL from worker. HTTP Status: ${response.statusCode}',
+          uri: uri,
+        );
+      }
+      
+      final body = await response.transform(const Utf8Decoder()).join();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      final url = data['url'] as String?;
+      if (url == null) {
+        throw const HttpException('Presigned URL response did not contain "url" key');
+      }
+      return url;
+    } finally {
+      client.close();
+    }
   }
 
-  String _getPublicRemoteUrl(String objectKey) {
-    return 'https://media.memovault.com/$objectKey';
+  static String _getPublicRemoteUrl(String objectKey) {
+    return '${EnvConfig.r2CdnBaseUrl}/$objectKey';
   }
 
   /// Downloads a mock or real R2 blob into a destination local file path.
@@ -145,9 +220,14 @@ class R2StorageServiceImpl implements R2StorageService {
       return;
     }
 
+    final objectKey = remoteUrl.split('/').last;
+    AppLogger.info('[R2StorageService] Fetching presigned download URL for key: $objectKey');
+    final presignedGetUrl = await _fetchPresignedDownloadUrl(objectKey);
+
     final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await client.getUrl(Uri.parse(remoteUrl));
+      final request = await client.getUrl(Uri.parse(presignedGetUrl));
       final response = await request.close();
       if (response.statusCode != HttpStatus.ok) {
         throw HttpException('Failed to download media blob from R2. HTTP Status: ${response.statusCode}');

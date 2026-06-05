@@ -177,7 +177,7 @@ class MessagingSetupFlowView extends GetView<MessagingSetupController> {
           return AppButton.primary(
             text: 'Generate Recovery Seed',
             icon: Icons.security_rounded,
-            onPressed: valid ? controller.proceedFromUsernameSelection : null,
+            onPressedAsync: valid ? controller.proceedFromUsernameSelection : null,
           );
         }),
       ],
@@ -420,7 +420,7 @@ class MessagingSetupFlowView extends GetView<MessagingSetupController> {
         AppButton.primary(
           text: 'Register & Activate Identity',
           icon: Icons.verified_user_rounded,
-          onPressed: controller.registerAndPublishIdentity,
+          onPressedAsync: controller.registerAndPublishIdentity,
         ),
       ],
     );

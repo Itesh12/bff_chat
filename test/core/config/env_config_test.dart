@@ -10,6 +10,8 @@ void main() {
       expect(EnvConfig.firebaseProjectId, 'memovault-dev');
       expect(EnvConfig.enableDetailedLogging, true);
       expect(EnvConfig.enableAnalytics, false);
+      expect(EnvConfig.r2WorkerBaseUrl, 'http://localhost:8787');
+      expect(EnvConfig.r2CdnBaseUrl, 'mock-r2://');
       expect(EnvConfig.isDevelopment, true);
       expect(EnvConfig.isProduction, false);
     });
@@ -21,6 +23,8 @@ void main() {
       expect(EnvConfig.firebaseProjectId, 'memovault-staging');
       expect(EnvConfig.enableDetailedLogging, true);
       expect(EnvConfig.enableAnalytics, true);
+      expect(EnvConfig.r2WorkerBaseUrl, 'https://staging-media-api.memovault.com');
+      expect(EnvConfig.r2CdnBaseUrl, 'https://staging-media.memovault.com');
       expect(EnvConfig.isDevelopment, false);
       expect(EnvConfig.isProduction, false);
     });
@@ -32,6 +36,8 @@ void main() {
       expect(EnvConfig.firebaseProjectId, 'memovault-prod');
       expect(EnvConfig.enableDetailedLogging, false);
       expect(EnvConfig.enableAnalytics, true);
+      expect(EnvConfig.r2WorkerBaseUrl, 'https://media-api.memovault.com');
+      expect(EnvConfig.r2CdnBaseUrl, 'https://media.memovault.com');
       expect(EnvConfig.isDevelopment, false);
       expect(EnvConfig.isProduction, true);
     });

@@ -380,6 +380,158 @@ class HiddenChatScreen extends StatelessWidget {
                   return _buildSafetyWarningCard(context, other);
                 }
 
+                final isRecording = controller.isRecording.value;
+
+                if (isRecording) {
+                  return SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.s16, AppSpacing.s8, AppSpacing.s16, AppSpacing.s16),
+                      child: Row(
+                        children: [
+                          AppIconButton.secondary(
+                            icon: Icons.delete_outline_rounded,
+                            tooltip: 'Cancel Recording',
+                            color: Colors.red,
+                            onPressed: () => controller.stopRecording(cancel: true),
+                          ),
+                          const AppGap.h8(),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: theme.cardColor,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: theme.dividerColor.withValues(alpha: 0.15),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const _RecordingPulseDot(),
+                                  const AppGap.h8(),
+                                  Text(
+                                    _formatDuration(Duration(seconds: controller.elapsedSeconds.value)),
+                                    style: AppTypography.bodyMedium.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                  const AppGap.h12(),
+                                  Expanded(
+                                    child: LiveWaveformVisualizer(
+                                      amplitudes: controller.liveAmplitudes,
+                                    ),
+                                  ),
+                                  const AppGap.h8(),
+                                  if (!controller.isRecordingLocked.value)
+                                    Text(
+                                      'Slide left to cancel',
+                                      style: AppTypography.bodySmall.copyWith(
+                                        color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const AppGap.h8(),
+                          GestureDetector(
+                            onTap: () => controller.stopRecording(cancel: false),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.green.withValues(alpha: 0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  )
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final isTextEmpty = controller.isTextEmpty.value;
+                final rightButton = isTextEmpty
+                    ? GestureDetector(
+                        onLongPressStart: (_) {
+                          controller.isRecordingLocked.value = false;
+                          controller.startRecording();
+                        },
+                        onLongPressMoveUpdate: (details) {
+                          if (details.localOffsetFromOrigin.dx < -80) {
+                            controller.stopRecording(cancel: true);
+                            AppSnackBar.success(
+                              title: 'Discarded',
+                              message: 'Recording cancelled.',
+                            );
+                          }
+                        },
+                        onLongPressEnd: (_) {
+                          if (controller.isRecording.value && !controller.isRecordingLocked.value) {
+                            controller.stopRecording(cancel: false);
+                          }
+                        },
+                        onTap: () {
+                          controller.isRecordingLocked.value = true;
+                          controller.startRecording();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              )
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.mic_none_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: controller.sendMessage,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              )
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      );
+
                 return SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(AppSpacing.s16, AppSpacing.s8, AppSpacing.s16, AppSpacing.s16),
@@ -423,28 +575,7 @@ class HiddenChatScreen extends StatelessWidget {
                           ),
                         ),
                         const AppGap.h8(),
-                        GestureDetector(
-                          onTap: controller.sendMessage,
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 3),
-                                )
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                        ),
+                        rightButton,
                       ],
                     ),
                   ),
@@ -645,7 +776,7 @@ class HiddenChatScreen extends StatelessWidget {
                                     color: theme.dividerColor.withValues(alpha: 0.08),
                                   ),
                           ),
-                    child: (msg.messageType == 'image' || msg.messageType == 'file' || msg.messageType == 'video')
+                    child: (msg.messageType == 'image' || msg.messageType == 'file' || msg.messageType == 'video' || msg.messageType == 'voice')
                         ? Obx(() {
                             final attachment = controller.attachments[msg.id];
                             if (attachment == null) {
@@ -887,6 +1018,7 @@ class HiddenChatScreen extends StatelessWidget {
   ) {
     final theme = Theme.of(context);
     final isImage = attachment.type.name == 'image';
+    final isVoice = attachment.type.name == 'voice';
     final textColor = isMe ? Colors.white : theme.textTheme.bodyLarge?.color;
 
     // Active upload/download progress
@@ -953,13 +1085,13 @@ class HiddenChatScreen extends StatelessWidget {
                 SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(
+                  child: const CircularProgressIndicator(
                     color: Colors.white,
                     strokeWidth: 2,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
+                const Text(
                   'Encrypting...',
                   style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
@@ -1031,6 +1163,119 @@ class HiddenChatScreen extends StatelessWidget {
               Positioned.fill(child: progressOverlay()),
             ],
           ),
+        ),
+      );
+    } else if (isVoice) {
+      final points = (attachment.waveform ?? '')
+          .split(',')
+          .map((s) => int.tryParse(s) ?? 0)
+          .toList();
+
+      final isThisActive = controller.activeAttachmentId.value == attachment.id;
+      final isThisPlaying = isThisActive && controller.isPlaying.value;
+      final pos = isThisActive ? controller.playbackPosition.value : Duration.zero;
+      final dur = isThisActive ? controller.playbackDuration.value : Duration(seconds: attachment.duration ?? 0);
+      final progress = dur.inMilliseconds > 0 ? pos.inMilliseconds / dur.inMilliseconds : 0.0;
+
+      return Container(
+        width: 240,
+        padding: const EdgeInsets.all(AppSpacing.s12),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.transparent : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: () => controller.togglePlayVoiceNote(msg.id, attachment),
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isMe ? Colors.white24 : theme.colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: _buildPlayIcon(attachment, isThisActive, isThisPlaying, isMe, theme),
+                ),
+              ),
+            ),
+            const AppGap.h12(),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth > 0 ? constraints.maxWidth : 150.0;
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (details) {
+                          if (isThisActive) {
+                            final fraction = (details.localPosition.dx / width).clamp(0.0, 1.0);
+                            controller.seekPlayback(fraction);
+                          }
+                        },
+                        onHorizontalDragUpdate: (details) {
+                          if (isThisActive) {
+                            final fraction = (details.localPosition.dx / width).clamp(0.0, 1.0);
+                            controller.seekPlayback(fraction);
+                          }
+                        },
+                        child: CustomPaint(
+                          size: Size(width, 24),
+                          painter: WaveformPainter(
+                            points: points,
+                            progress: progress,
+                            color: isMe
+                                ? Colors.white.withValues(alpha: 0.3)
+                                : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.25),
+                            progressColor: isMe ? Colors.white : theme.colorScheme.primary,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isThisActive
+                            ? '${_formatDuration(pos)} / ${_formatDuration(dur)}'
+                            : _formatDuration(Duration(seconds: attachment.duration ?? 0)),
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: isMe ? Colors.white70 : theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      if (isThisActive) ...[
+                        GestureDetector(
+                          onTap: controller.togglePlaybackSpeed,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isMe ? Colors.white24 : theme.colorScheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${controller.playbackSpeed.value.toStringAsFixed(1).replaceAll('.0', '')}x',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isMe ? Colors.white : theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       );
     } else {
@@ -1112,5 +1357,189 @@ class HiddenChatScreen extends StatelessWidget {
       i++;
     }
     return '${d.toStringAsFixed(1)} ${suffixes[i]}';
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  Widget _buildPlayIcon(
+    AttachmentEntity attachment,
+    bool isThisActive,
+    bool isThisPlaying,
+    bool isMe,
+    ThemeData theme,
+  ) {
+    final status = attachment.status;
+    final color = isMe ? Colors.white : theme.colorScheme.primary;
+
+    if (status == 'uploading' || status == 'decrypting' || status == 'encrypting' || status == 'queued') {
+      return SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+        ),
+      );
+    }
+
+    final hasLocal = attachment.localPath != null &&
+        attachment.localPath!.isNotEmpty &&
+        File(attachment.localPath!).existsSync();
+
+    if (!hasLocal) {
+      return Icon(
+        Icons.cloud_download_rounded,
+        size: 18,
+        color: color,
+      );
+    }
+
+    if (isThisPlaying) {
+      return Icon(
+        Icons.pause_rounded,
+        size: 18,
+        color: color,
+      );
+    }
+
+    return Icon(
+      Icons.play_arrow_rounded,
+      size: 18,
+      color: color,
+    );
+  }
+}
+
+class WaveformPainter extends CustomPainter {
+  final List<int> points;
+  final double progress;
+  final Color color;
+  final Color progressColor;
+
+  WaveformPainter({
+    required this.points,
+    required this.progress,
+    required this.color,
+    required this.progressColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    const barWidth = 3.0;
+    const spacing = 2.0;
+    final totalBarWidth = barWidth + spacing;
+    final totalBarsCount = points.length;
+
+    final centerY = size.height / 2;
+
+    const double startX = 0;
+    for (int i = 0; i < totalBarsCount; i++) {
+      final barHeight = (points[i] / 100.0) * size.height;
+      final x = startX + i * totalBarWidth;
+      final y = centerY - barHeight / 2;
+
+      final barProgress = i / totalBarsCount;
+      paint.color = barProgress <= progress ? progressColor : color;
+
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, y, barWidth, barHeight.clamp(2, size.height)),
+        const Radius.circular(1.5),
+      );
+      canvas.drawRRect(rect, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant WaveformPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.progressColor != progressColor ||
+        oldDelegate.points != points;
+  }
+}
+
+class _RecordingPulseDot extends StatefulWidget {
+  const _RecordingPulseDot();
+
+  @override
+  State<_RecordingPulseDot> createState() => _RecordingPulseDotState();
+}
+
+class _RecordingPulseDotState extends State<_RecordingPulseDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          color: Colors.red,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+}
+
+class LiveWaveformVisualizer extends StatelessWidget {
+  final List<double> amplitudes;
+  const LiveWaveformVisualizer({super.key, required this.amplitudes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: 24,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(15, (index) {
+          double amp = 0.05;
+          if (amplitudes.isNotEmpty) {
+            final lookupIndex = (amplitudes.length * index / 15).floor();
+            if (lookupIndex < amplitudes.length) {
+              amp = (amplitudes[lookupIndex] / 100.0).clamp(0.05, 1.0);
+            }
+          }
+          return Container(
+            width: 3,
+            height: 24 * amp,
+            margin: const EdgeInsets.symmetric(horizontal: 1.5),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: BorderRadius.circular(1.5),
+            ),
+          );
+        }),
+      ),
+    );
   }
 }

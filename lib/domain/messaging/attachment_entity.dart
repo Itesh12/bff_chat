@@ -16,6 +16,8 @@ class AttachmentEntity {
   final int totalBytes;
   final int encryptionVersion;
   final String? checksumSha256;
+  final int? duration;
+  final String? waveform;
   final DateTime createdAt;
 
   const AttachmentEntity({
@@ -34,6 +36,8 @@ class AttachmentEntity {
     this.totalBytes = 0,
     this.encryptionVersion = 1,
     this.checksumSha256,
+    this.duration,
+    this.waveform,
     required this.createdAt,
   });
 
@@ -53,6 +57,8 @@ class AttachmentEntity {
     int? totalBytes,
     int? encryptionVersion,
     String? checksumSha256,
+    int? duration,
+    String? waveform,
     DateTime? createdAt,
   }) {
     return AttachmentEntity(
@@ -71,6 +77,8 @@ class AttachmentEntity {
       totalBytes: totalBytes ?? this.totalBytes,
       encryptionVersion: encryptionVersion ?? this.encryptionVersion,
       checksumSha256: checksumSha256 ?? this.checksumSha256,
+      duration: duration ?? this.duration,
+      waveform: waveform ?? this.waveform,
       createdAt: createdAt ?? this.createdAt,
     );
   }

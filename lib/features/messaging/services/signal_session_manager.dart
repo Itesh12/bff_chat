@@ -517,6 +517,8 @@ class SignalSessionManager {
       final thumbnailPath = attachmentData['thumbnailPath'] as String?;
       final checksumSha256 = attachmentData['checksumSha256'] as String?;
       final encryptionVersion = attachmentData['encryptionVersion'] as int? ?? 1;
+      final duration = attachmentData['duration'] as int?;
+      final waveform = attachmentData['waveform'] as String?;
 
       localAttachment = AttachmentEntity(
         id: attachmentId,
@@ -531,6 +533,8 @@ class SignalSessionManager {
         keyPayload: hexMediaKey,
         checksumSha256: checksumSha256,
         encryptionVersion: encryptionVersion,
+        duration: duration,
+        waveform: waveform,
         createdAt: DateTime.now().toUtc(),
       );
       decryptedText = '[Media Attachment]';
@@ -686,6 +690,8 @@ class SignalSessionManager {
         'checksumSha256': attachment.checksumSha256,
         'encryptionVersion': attachment.encryptionVersion,
         'keyRecipient': keyRecipientHex,
+        'duration': attachment.duration,
+        'waveform': attachment.waveform,
         'keyEscrow': {
           ...escrowBlock,
           'keyVersion': compKeyVersion,

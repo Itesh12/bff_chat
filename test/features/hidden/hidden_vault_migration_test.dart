@@ -49,8 +49,8 @@ void main() {
       final executorv7 = NativeDatabase(dbFile);
       final db = HiddenVaultDatabase(executorv7);
 
-      // 3. Assert schema version is 8
-      expect(db.schemaVersion, 8);
+      // 3. Assert schema version is 9
+      expect(db.schemaVersion, 9);
 
       // 5. Query all notes and verify they exist and have correct values
       final notes = await db.hiddenNotesDao.watchAllNotes().first;
@@ -121,8 +121,8 @@ void main() {
       final executorv7 = NativeDatabase(dbFile);
       final db = HiddenVaultDatabase(executorv7);
 
-      // Assert schema version is 8
-      expect(db.schemaVersion, 8);
+      // Assert schema version is 9
+      expect(db.schemaVersion, 9);
 
       // Verify categories table is created and writable
       await db.customStatement("INSERT INTO hidden_categories (id, name, color_hex, display_order, created_at) VALUES ('cat_1', 'Work', 'FF0000', 0, 1680000000);");

@@ -31,15 +31,15 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
   HiddenVaultDatabase(super.e);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
-        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v8).');
+        AppLogger.info('[HiddenVaultDatabase] Creating database tables from scratch (schema v9).');
         await m.createAll();
-        AppLogger.info('[HiddenVaultDatabase] Schema v8 created.');
+        AppLogger.info('[HiddenVaultDatabase] Schema v9 created.');
       },
       onUpgrade: (Migrator m, int from, int to) async {
         AppLogger.info('[HiddenVaultDatabase] Upgrading schema from v$from to v$to.');
@@ -96,6 +96,13 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
             await m.addColumn(attachmentsTable, attachmentsTable.encryptionVersion);
             await m.addColumn(attachmentsTable, attachmentsTable.checksumSha256);
             AppLogger.info('[HiddenVaultDatabase] v8 migration: added progress, versioning, and checksum to attachments.');
+          }
+        }
+        if (from < 9) {
+          if (from == 7 || from == 8) {
+            await m.addColumn(attachmentsTable, attachmentsTable.duration);
+            await m.addColumn(attachmentsTable, attachmentsTable.waveform);
+            AppLogger.info('[HiddenVaultDatabase] v9 migration: added duration and waveform columns.');
           }
         }
       },

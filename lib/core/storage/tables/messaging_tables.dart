@@ -92,6 +92,8 @@ class AttachmentsTable extends Table {
   IntColumn get totalBytes => integer().withDefault(const Constant(0))();
   IntColumn get encryptionVersion => integer().withDefault(const Constant(1))();
   TextColumn get checksumSha256 => text().nullable()();
+  IntColumn get duration => integer().nullable()();
+  TextColumn get waveform => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
 
   @override

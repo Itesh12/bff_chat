@@ -13,6 +13,11 @@ import 'package:memovault/data/messaging/services/r2_storage_service_impl.dart';
 import 'package:memovault/domain/messaging/services/media_transfer_service.dart';
 import 'package:memovault/data/messaging/services/media_transfer_service_impl.dart';
 
+import 'package:memovault/domain/messaging/services/audio_recorder_service.dart';
+import 'package:memovault/data/messaging/services/audio_recorder_service_impl.dart';
+import 'package:memovault/domain/messaging/services/audio_player_service.dart';
+import 'package:memovault/data/messaging/services/audio_player_service_impl.dart';
+
 class InitialBinding implements Bindings {
   @override
   void dependencies() {
@@ -45,6 +50,16 @@ class InitialBinding implements Bindings {
     );
     Get.put<MediaTransferService>(
       MediaTransferServiceImpl(r2Storage, Get.find<MessagingRepository>()),
+      permanent: true,
+    );
+
+    // Register Audio Recorder and Player services
+    Get.put<AudioRecorderService>(
+      AudioRecorderServiceImpl(),
+      permanent: true,
+    );
+    Get.put<AudioPlayerService>(
+      AudioPlayerServiceImpl(),
       permanent: true,
     );
   }

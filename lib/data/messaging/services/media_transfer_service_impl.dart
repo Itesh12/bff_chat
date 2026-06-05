@@ -82,7 +82,11 @@ class MediaTransferServiceImpl implements MediaTransferService {
     final localAttachment = AttachmentEntity(
       id: attachmentId,
       messageId: messageId,
-      type: AttachmentType.fromJson(fileType.startsWith('image/') ? 'image' : 'file'),
+      type: AttachmentType.fromJson(
+        fileType.startsWith('audio/') || fileType.startsWith('voice')
+            ? 'voice'
+            : (fileType.startsWith('image/') ? 'image' : 'file'),
+      ),
       fileName: file.path.split(RegExp(r'[/\\]')).last,
       mimeType: fileType,
       size: totalSize,
