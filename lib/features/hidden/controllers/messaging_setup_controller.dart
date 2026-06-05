@@ -13,8 +13,11 @@ import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/hidden/services/seed_recovery_service.dart';
+import 'package:memovault/features/messaging/services/signal_session_manager.dart';
 import 'package:memovault/features/messaging/services/signal_store_impl.dart';
 import 'package:memovault/domain/messaging/messaging_repository.dart';
+import 'package:memovault/features/messaging/services/signal_sync_service.dart';
+import 'package:memovault/features/messaging/services/prekey_rotation_service.dart';
 
 class MessagingSetupController extends GetxController {
   final MessagingIdentityService _identityService;
@@ -26,7 +29,8 @@ class MessagingSetupController extends GetxController {
   final usernameController = TextEditingController();
 
   // Reactive step tracker
-  final Rx<MessagingSetupState> setupState = MessagingSetupState.unconfigured.obs;
+  final Rx<MessagingSetupState> setupState =
+      MessagingSetupState.unconfigured.obs;
 
   // Username Selection States
   final RxString username = ''.obs;
@@ -40,10 +44,16 @@ class MessagingSetupController extends GetxController {
   final RxBool isSeedRevealed = false.obs;
 
   // Positioning Quiz States
-  final RxInt quizIndex = 0.obs; // Current quiz question: 0, 1, 2 for 3 position prompts
-  final List<int> quizPositions = [2, 7, 10]; // Word #3 (index 2), Word #8 (index 7), Word #11 (index 10)
+  final RxInt quizIndex =
+      0.obs; // Current quiz question: 0, 1, 2 for 3 position prompts
+  final List<int> quizPositions = [
+    2,
+    7,
+    10
+  ]; // Word #3 (index 2), Word #8 (index 7), Word #11 (index 10)
   final RxList<String> quizOptions = <String>[].obs;
-  final RxList<int> quizAnswersSelected = <int>[].obs; // Track completed answers
+  final RxList<int> quizAnswersSelected =
+      <int>[].obs; // Track completed answers
 
   @override
   void onInit() {
@@ -56,7 +66,8 @@ class MessagingSetupController extends GetxController {
     setupState.value = state;
     final savedUser = await _identityService.getUsername();
     if (savedUser != null) {
-      final cleanName = savedUser.startsWith('@') ? savedUser.substring(1) : savedUser;
+      final cleanName =
+          savedUser.startsWith('@') ? savedUser.substring(1) : savedUser;
       username.value = cleanName;
       final savedDisplay = await _identityService.getDisplayName();
       usernameController.text = savedDisplay ?? cleanName;
@@ -68,10 +79,18 @@ class MessagingSetupController extends GetxController {
   }
 
   // ─── Username Validation ──────────────────────────────────────────────────
-  
+
   static const List<String> _reservedWords = [
-    'admin', 'administrator', 'moderator', 'staff', 'support', 'system', 'root',
-    'official', 'memovault', 'security'
+    'admin',
+    'administrator',
+    'moderator',
+    'staff',
+    'support',
+    'system',
+    'root',
+    'official',
+    'memovault',
+    'security'
   ];
 
   void onUsernameChanged(String val) {
@@ -115,13 +134,14 @@ class MessagingSetupController extends GetxController {
     if (usernameController.text.isEmpty && rawVal.isNotEmpty) {
       usernameController.text = rawVal;
     }
-    
+
     // Normalize case and validate format (must start with letter, no leading/trailing/double underscores)
     final regex = RegExp(r'^[a-z](?!.*__)[a-z0-9_]{2,19}(?<!_)$');
     if (!regex.hasMatch(normalized)) {
       isCheckingUsername.value = false;
       isUsernameAvailable.value = false;
-      usernameFeedback.value = '3-20 chars, lowercase a-z, 0-9, and _ (no leading/trailing/double _)';
+      usernameFeedback.value =
+          '3-20 chars, lowercase a-z, 0-9, and _ (no leading/trailing/double _)';
       return;
     }
 
@@ -136,7 +156,28 @@ class MessagingSetupController extends GetxController {
     // Uniqueness checks (Mocked local simulation for test/offline, integrates directly via pseudonyms collection)
     // Simulates a unique availability check
     await Future.delayed(const Duration(milliseconds: 250));
-    
+
+    if (Firebase.apps.isNotEmpty) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('pseudonyms')
+            .doc(normalized)
+            .get();
+        if (doc.exists) {
+          isCheckingUsername.value = false;
+          isUsernameAvailable.value = false;
+          usernameFeedback.value = 'Username already registered';
+          return;
+        }
+      } catch (e) {
+        AppLogger.error('[MessagingSetupController] Firestore checkUsernameUniqueness failed: $e');
+        isCheckingUsername.value = false;
+        isUsernameAvailable.value = false;
+        usernameFeedback.value = 'Error checking username availability';
+        return;
+      }
+    }
+
     // Simulates taken usernames for testing
     if (normalized == 'taken_user' || normalized == 'rahul_taken') {
       isCheckingUsername.value = false;
@@ -187,14 +228,14 @@ class MessagingSetupController extends GetxController {
 
   void _buildQuizOptions() {
     if (quizIndex.value >= quizPositions.length) return;
-    
+
     final targetIndex = quizPositions[quizIndex.value];
     final correctAnswer = seedWords[targetIndex];
 
     // Generate random options from bip39Vocab to populate choices card
     final Set<String> options = {correctAnswer};
     final random = Random();
-    
+
     while (options.length < 4) {
       final w = seedWords[random.nextInt(12)];
       options.add(w);
@@ -306,7 +347,8 @@ class MessagingSetupController extends GetxController {
         privateKey: signedPrekeyPair,
         signature: signedPrekeySignature,
       );
-      await secureStorage.write('signed_prekey_record_$signedPrekeyId', _bytesToHex(signedPreKeyRecord.serialize()));
+      await secureStorage.write('signed_prekey_record_$signedPrekeyId',
+          _bytesToHex(signedPreKeyRecord.serialize()));
 
       await _identityService.saveKyberPreKey(
         id: kyberPrekeyId,
@@ -322,7 +364,8 @@ class MessagingSetupController extends GetxController {
         keyPair: kyberKeyPair,
         signature: kyberPrekeySignature,
       );
-      await secureStorage.write('kyber_prekey_record_$kyberPrekeyId', _bytesToHex(kyberPreKeyRecord.serialize()));
+      await secureStorage.write('kyber_prekey_record_$kyberPrekeyId',
+          _bytesToHex(kyberPreKeyRecord.serialize()));
 
       // 5. Perform Firestore Transaction Registration if Firebase is initialized
       if (Firebase.apps.isNotEmpty) {
@@ -337,7 +380,8 @@ class MessagingSetupController extends GetxController {
 
         final firestore = FirebaseFirestore.instance;
         final docRef = firestore.collection('pseudonyms').doc(username.value);
-        final bundleRef = firestore.collection('prekey_bundles').doc(currentUser.uid);
+        final bundleRef =
+            firestore.collection('prekey_bundles').doc(currentUser.uid);
 
         await firestore.runTransaction((transaction) async {
           final docSnapshot = await transaction.get(docRef);
@@ -365,7 +409,8 @@ class MessagingSetupController extends GetxController {
             'signedPrekeyPublic': _bytesToHex(signedPrekeyPublic.serialize()),
             'signedPrekeySignature': _bytesToHex(signedPrekeySignature),
             'kyberPrekeyId': kyberPrekeyId,
-            'kyberPrekeyPublic': _bytesToHex(kyberKeyPair.getPublicKey().serialize()),
+            'kyberPrekeyPublic':
+                _bytesToHex(kyberKeyPair.getPublicKey().serialize()),
             'kyberPrekeySignature': _bytesToHex(kyberPrekeySignature),
             'oneTimePrekeys': oneTimePrekeysData,
             'updatedAt': FieldValue.serverTimestamp(),
@@ -383,12 +428,25 @@ class MessagingSetupController extends GetxController {
       setupState.value = MessagingSetupState.ready;
       await _identityService.setSetupState(MessagingSetupState.ready);
 
+      // Start E2EE services dynamically upon setup completion
+      try {
+        Get.find<SignalSyncService>().startSyncListener();
+        Get.find<SignalSessionManager>().checkAndReplenishOneTimePrekeys();
+        Get.find<PrekeyRotationService>().checkAndRotatePrekeys();
+        AppLogger.info(
+            '[MessagingSetupController] Secure E2EE sync and key services initialized.');
+      } catch (e) {
+        AppLogger.warning(
+            '[MessagingSetupController] Could not start sync/key services: $e');
+      }
+
       AppSnackBar.success(
         title: 'Identity Published',
         message: 'Your secure E2EE messaging pseudonym is active!',
       );
     } catch (e, s) {
-      AppLogger.error('Failed to register and publish identity', error: e, stackTrace: s);
+      AppLogger.error('Failed to register and publish identity',
+          error: e, stackTrace: s);
       AppSnackBar.error(
         title: 'Registration Failed',
         message: 'Could not register key bundles: $e',
@@ -401,7 +459,7 @@ class MessagingSetupController extends GetxController {
   Future<void> restoreIdentityFromMnemonic(String mnemonicInput) async {
     onUserInteraction();
     final normalized = mnemonicInput.trim().toLowerCase();
-    
+
     if (!_seedRecoveryService.validateMnemonic(normalized)) {
       AppSnackBar.error(
         title: 'Invalid Seed',
@@ -429,7 +487,8 @@ class MessagingSetupController extends GetxController {
             .get();
 
         if (query.docs.isEmpty) {
-          throw Exception('No registered username found for this identity key.');
+          throw Exception(
+              'No registered username found for this identity key.');
         }
 
         final doc = query.docs.first;
@@ -445,16 +504,29 @@ class MessagingSetupController extends GetxController {
       }
 
       await _identityService.saveIdentityKeys(pubKey: pubKey, privKey: privKey);
-      
+
       setupState.value = MessagingSetupState.ready;
       await _identityService.setSetupState(MessagingSetupState.ready);
+
+      // Start E2EE services dynamically upon setup completion
+      try {
+        Get.find<SignalSyncService>().startSyncListener();
+        Get.find<SignalSessionManager>().checkAndReplenishOneTimePrekeys();
+        Get.find<PrekeyRotationService>().checkAndRotatePrekeys();
+        AppLogger.info(
+            '[MessagingSetupController] Secure E2EE sync and key services initialized post-restore.');
+      } catch (e) {
+        AppLogger.warning(
+            '[MessagingSetupController] Could not start sync/key services post-restore: $e');
+      }
 
       AppSnackBar.success(
         title: 'Identity Restored',
         message: 'E2E identity keypair successfully recovered!',
       );
     } catch (e, s) {
-      AppLogger.error('Failed to restore identity from mnemonic', error: e, stackTrace: s);
+      AppLogger.error('Failed to restore identity from mnemonic',
+          error: e, stackTrace: s);
       AppSnackBar.error(
         title: 'Restoration Failed',
         message: 'Could not verify seed signature: $e',

@@ -62,7 +62,7 @@ class SignalSessionManager {
       if (doc == null) throw Exception('Target username not found in directory.');
       bobUid = doc['uid'] as String;
       bobIdentityKeyPub = doc['identityPublicKey'] as String;
-    } else {
+    } else if (Firebase.apps.isNotEmpty) {
       final firestore = FirebaseFirestore.instance;
       final pseudonymDoc = await firestore.collection('pseudonyms').doc(targetUsername).get();
       if (!pseudonymDoc.exists) {
@@ -70,6 +70,8 @@ class SignalSessionManager {
       }
       bobUid = pseudonymDoc.get('uid') as String;
       bobIdentityKeyPub = pseudonymDoc.get('identityPublicKey') as String;
+    } else {
+      throw Exception('[SignalSessionManager] Firebase not available and no mock data. Cannot resolve pseudonym for $targetUsername.');
     }
 
     // 2. Check for contact blocking gate (Point 5)
@@ -120,7 +122,7 @@ class SignalSessionManager {
         selectedPreKeyId = first['id'] as int;
         selectedPreKeyPublic = _hexToBytes(first['publicKey'] as String);
       }
-    } else {
+    } else if (Firebase.apps.isNotEmpty) {
       final firestore = FirebaseFirestore.instance;
       final bundleRef = firestore.collection('prekey_bundles').doc(bobUid);
 
@@ -173,6 +175,8 @@ class SignalSessionManager {
         selectedPreKeyId = chosenOtp['id'] as int;
         selectedPreKeyPublic = _hexToBytes(chosenOtp['publicKey'] as String);
       }
+    } else {
+      throw Exception('[SignalSessionManager] Firebase not available and no mock data. Cannot fetch prekey bundle for $bobUid.');
     }
 
     final identityKeyPubBytes = _hexToBytes(identityKeyPubHex);
@@ -268,7 +272,7 @@ class SignalSessionManager {
 
     if (Firebase.apps.isEmpty && mockSyncQueues != null) {
       mockSyncQueues!.putIfAbsent(bobUid, () => []).add(messageData);
-    } else {
+    } else if (Firebase.apps.isNotEmpty) {
       final firestore = FirebaseFirestore.instance;
       await firestore
           .collection('sync_queues')
@@ -279,6 +283,8 @@ class SignalSessionManager {
         ...messageData,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    } else {
+      AppLogger.warning('[SignalSessionManager] Dev mode: skipping Firestore handshake sync queue push (no Firebase, no mock).');
     }
   }
 
@@ -424,7 +430,7 @@ class SignalSessionManager {
 
     if (Firebase.apps.isEmpty && mockSyncQueues != null) {
       mockSyncQueues!.putIfAbsent(targetUid, () => []).add(messageData);
-    } else {
+    } else if (Firebase.apps.isNotEmpty) {
       final firestore = FirebaseFirestore.instance;
       await firestore
           .collection('sync_queues')
@@ -435,6 +441,8 @@ class SignalSessionManager {
         ...messageData,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    } else {
+      AppLogger.warning('[SignalSessionManager] Dev mode: skipping Firestore secure message sync queue push (no Firebase, no mock).');
     }
   }
 
@@ -701,7 +709,7 @@ class SignalSessionManager {
 
     if (Firebase.apps.isEmpty && mockSyncQueues != null) {
       mockSyncQueues!.putIfAbsent(targetUid, () => []).add(messageData);
-    } else {
+    } else if (Firebase.apps.isNotEmpty) {
       final firestore = FirebaseFirestore.instance;
       await firestore
           .collection('sync_queues')
@@ -712,6 +720,8 @@ class SignalSessionManager {
         ...messageData,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    } else {
+      AppLogger.warning('[SignalSessionManager] Dev mode: skipping Firestore media message sync queue push (no Firebase, no mock).');
     }
 
     // 5. Insert or update E2EE message locally
@@ -766,7 +776,7 @@ class SignalSessionManager {
       if (doc == null) throw Exception('Target username not found in directory.');
       bobUid = doc['uid'] as String;
       bobIdentityKeyPub = doc['identityPublicKey'] as String;
-    } else {
+    } else if (Firebase.apps.isNotEmpty) {
       final firestore = FirebaseFirestore.instance;
       final pseudonymDoc = await firestore.collection('pseudonyms').doc(cleanUsername).get();
       if (!pseudonymDoc.exists) {
@@ -774,6 +784,8 @@ class SignalSessionManager {
       }
       bobUid = pseudonymDoc.get('uid') as String;
       bobIdentityKeyPub = pseudonymDoc.get('identityPublicKey') as String;
+    } else {
+      throw Exception('[SignalSessionManager] Firebase not available and no mock data. Cannot re-approve identity for $cleanUsername.');
     }
 
     // 1. Update participant to the new key and set trustState = 'accepted'

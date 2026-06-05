@@ -127,17 +127,21 @@ class MessagingIdentityServiceImpl implements MessagingIdentityService {
     await _secureStorage.delete(_keyDisplayName);
     await _secureStorage.delete(_keyPub);
     await _secureStorage.delete(_keyPriv);
+    await _secureStorage.delete('messaging_registration_id');
+    await _secureStorage.delete('messaging_last_prekey_rotation_timestamp');
 
-    // Delete prekeys list
+    // Delete prekeys list and records
     final spIds = await getSignedPreKeyIds();
     for (final id in spIds) {
       await _secureStorage.delete('messaging_signed_prekey_$id');
+      await _secureStorage.delete('signed_prekey_record_$id');
     }
     await _secureStorage.delete(_keySignedPreKeyIds);
 
     final kpIds = await getKyberPreKeyIds();
     for (final id in kpIds) {
       await _secureStorage.delete('messaging_kyber_prekey_$id');
+      await _secureStorage.delete('kyber_prekey_record_$id');
     }
     await _secureStorage.delete(_keyKyberPreKeyIds);
 

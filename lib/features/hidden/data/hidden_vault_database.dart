@@ -106,6 +106,16 @@ class HiddenVaultDatabase extends _$HiddenVaultDatabase {
           }
         }
       },
+      beforeOpen: (OpeningDetails details) async {
+        await into(participantsTable).insertOnConflictUpdate(
+          ParticipantsTableCompanion(
+            id: const Value('me'),
+            username: const Value('me'),
+            identityKeyPub: const Value('me_public_key'),
+            trustState: const Value('accepted'),
+          ),
+        );
+      },
     );
   }
 }
