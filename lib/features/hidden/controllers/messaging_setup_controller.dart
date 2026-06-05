@@ -9,6 +9,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:libsignal/libsignal.dart';
 import 'package:memovault/core/services/secure_storage_service.dart';
 import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
+import 'package:memovault/core/observability/app_logger.dart';
 import 'package:memovault/features/hidden/domain/entities/messaging_setup_state.dart';
 import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
 import 'package:memovault/features/hidden/services/seed_recovery_service.dart';
@@ -386,7 +387,8 @@ class MessagingSetupController extends GetxController {
         title: 'Identity Published',
         message: 'Your secure E2EE messaging pseudonym is active!',
       );
-    } catch (e) {
+    } catch (e, s) {
+      AppLogger.error('Failed to register and publish identity', error: e, stackTrace: s);
       AppSnackBar.error(
         title: 'Registration Failed',
         message: 'Could not register key bundles: $e',
@@ -451,7 +453,8 @@ class MessagingSetupController extends GetxController {
         title: 'Identity Restored',
         message: 'E2E identity keypair successfully recovered!',
       );
-    } catch (e) {
+    } catch (e, s) {
+      AppLogger.error('Failed to restore identity from mnemonic', error: e, stackTrace: s);
       AppSnackBar.error(
         title: 'Restoration Failed',
         message: 'Could not verify seed signature: $e',

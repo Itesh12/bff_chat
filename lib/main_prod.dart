@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:libsignal/libsignal.dart';
 import 'package:memovault/app.dart';
 import 'package:memovault/core/config/env_config.dart';
 import 'package:memovault/core/observability/app_logger.dart';
@@ -21,6 +22,7 @@ import 'package:memovault/firebase_options_prod.dart';
 /// Firebase project: flutterpay-83bad  |  App: com.memovault
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LibSignal.init();
   EnvConfig.initialize(Environment.prod);
 
   // --- Firebase initialization (must come before observability outputs for Crashlytics) ---

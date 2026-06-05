@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:libsignal/libsignal.dart';
 import 'package:memovault/app.dart';
 import 'package:memovault/core/config/env_config.dart';
 import 'package:memovault/core/observability/app_logger.dart';
@@ -22,6 +23,7 @@ import 'package:memovault/firebase_options_staging.dart';
 /// Firebase project: flutterpay-83bad  |  App: com.memovault.staging
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LibSignal.init();
   EnvConfig.initialize(Environment.staging);
 
   // --- Firebase initialization (must come before observability outputs for Crashlytics) ---
@@ -29,7 +31,8 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  final firebaseMs = PerformanceTracker.finish('startup_firebase')?.inMilliseconds ?? 0;
+  final firebaseMs =
+      PerformanceTracker.finish('startup_firebase')?.inMilliseconds ?? 0;
 
   // --- Observability bootstrap ---
   // Staging: console + Crashlytics (warning+, ≤30 days, per ADR-013).
@@ -62,7 +65,8 @@ Future<void> main() async {
   PerformanceTracker.start('startup_secure_storage');
   Get.put<SecureStorageService>(SecureStorageServiceImpl(), permanent: true);
   AppLogger.info('startup_secure_storage_ms', metadata: {
-    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ?? 0,
+    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ??
+        0,
   });
 
   // 2. Preferences
@@ -85,7 +89,8 @@ Future<void> main() async {
   // 4. Theme
   Get.put<ThemeService>(ThemeService(), permanent: true);
 
-  final totalMs = PerformanceTracker.finish('startup_total')?.inMilliseconds ?? 0;
+  final totalMs =
+      PerformanceTracker.finish('startup_total')?.inMilliseconds ?? 0;
   AppLogger.info('App bootstrap complete', metadata: {
     'startup_total_ms': totalMs,
   });

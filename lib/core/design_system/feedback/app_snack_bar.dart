@@ -5,6 +5,7 @@ import 'package:memovault/core/theme/app_spacing.dart';
 import 'package:memovault/core/theme/app_radius.dart';
 import 'package:memovault/core/theme/app_typography.dart';
 import 'package:memovault/core/config/env_config.dart';
+import 'package:memovault/core/observability/app_logger.dart';
 
 /// A static design system helper to trigger consistent, themed snackbars.
 /// Avoids using [Get.snackbar] directly by structuring colors, margins, and icons internally.
@@ -50,8 +51,22 @@ abstract final class AppSnackBar {
       return;
     }
 
-    final context = Get.context;
+    final context = Get.overlayContext ?? Get.context;
+
+    // Always print to console for visibility in terminal/log outputs
+    debugPrint('\n=================== APP SNACKBAR ===================');
+    debugPrint('TITLE: $title');
+    debugPrint('MESSAGE: $message');
+    debugPrint('====================================================\n');
+
     if (context == null) return;
+
+    // Fail-safe check for Overlay widget ancestor
+    if (Overlay.maybeOf(context) == null) {
+      AppLogger.warning(
+          '[AppSnackBar] No Overlay widget found. Skipping overlay display.');
+      return;
+    }
 
     final theme = Theme.of(context);
     final colors = theme.extension<AppColorScheme>();
