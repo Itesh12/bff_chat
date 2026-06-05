@@ -19,6 +19,8 @@ abstract final class EnvConfig {
   static late String firebaseProjectId;
   static late bool enableDetailedLogging;
   static late bool enableAnalytics;
+  static late String r2WorkerBaseUrl;
+  static late String r2CdnBaseUrl;
 
   static void initialize(Environment env) {
     environment = env;
@@ -27,14 +29,20 @@ abstract final class EnvConfig {
         firebaseProjectId = 'memovault-dev';
         enableDetailedLogging = true;
         enableAnalytics = false;
+        r2WorkerBaseUrl = 'http://localhost:8787';
+        r2CdnBaseUrl = 'mock-r2://';
       case Environment.staging:
         firebaseProjectId = 'memovault-staging';
         enableDetailedLogging = true;
         enableAnalytics = true;
+        r2WorkerBaseUrl = 'https://staging-media-api.memovault.com';
+        r2CdnBaseUrl = 'https://staging-media.memovault.com';
       case Environment.prod:
         firebaseProjectId = 'memovault-prod';
         enableDetailedLogging = false;
         enableAnalytics = true;
+        r2WorkerBaseUrl = 'https://media-api.memovault.com';
+        r2CdnBaseUrl = 'https://media.memovault.com';
     }
   }
 
