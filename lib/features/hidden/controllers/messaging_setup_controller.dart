@@ -163,10 +163,28 @@ class MessagingSetupController extends GetxController {
         if (auth.currentUser == null) {
           await auth.signInAnonymously();
         }
-        final doc = await FirebaseFirestore.instance
-            .collection('pseudonyms')
-            .doc(normalized)
-            .get();
+        DocumentSnapshot doc;
+        try {
+          doc = await FirebaseFirestore.instance
+              .collection('pseudonyms')
+              .doc(normalized)
+              .get();
+        } catch (e) {
+          final isPermissionDenied = e is FirebaseException && e.code == 'permission-denied' ||
+              e.toString().contains('permission-denied') ||
+              e.toString().contains('PERMISSION_DENIED');
+          if (isPermissionDenied) {
+            AppLogger.warning('[MessagingSetupController] Firestore checkUsernameUniqueness permission denied. Retrying with fresh anonymous session.');
+            await auth.signOut();
+            await auth.signInAnonymously();
+            doc = await FirebaseFirestore.instance
+                .collection('pseudonyms')
+                .doc(normalized)
+                .get();
+          } else {
+            rethrow;
+          }
+        }
         if (doc.exists) {
           isCheckingUsername.value = false;
           isUsernameAvailable.value = false;
@@ -177,7 +195,7 @@ class MessagingSetupController extends GetxController {
         AppLogger.error('[MessagingSetupController] Firestore checkUsernameUniqueness failed: $e');
         isCheckingUsername.value = false;
         isUsernameAvailable.value = false;
-        usernameFeedback.value = 'Error checking username availability';
+        usernameFeedback.value = 'Error checking: $e';
         return;
       }
     }
@@ -377,49 +395,68 @@ class MessagingSetupController extends GetxController {
         if (auth.currentUser == null) {
           await auth.signInAnonymously();
         }
-        final currentUser = auth.currentUser;
-        if (currentUser == null) {
-          throw Exception('Failed to authenticate anonymously');
-        }
 
-        final firestore = FirebaseFirestore.instance;
-        final docRef = firestore.collection('pseudonyms').doc(username.value);
-        final bundleRef =
-            firestore.collection('prekey_bundles').doc(currentUser.uid);
-
-        await firestore.runTransaction((transaction) async {
-          final docSnapshot = await transaction.get(docRef);
-          if (docSnapshot.exists) {
-            final existingUid = docSnapshot.get('uid');
-            if (existingUid != currentUser.uid) {
-              throw Exception('USERNAME_ALREADY_EXISTS');
-            }
+        Future<void> runRegistration() async {
+          final currentUser = auth.currentUser;
+          if (currentUser == null) {
+            throw Exception('Failed to authenticate anonymously');
           }
 
-          // Write pseudonym document
-          transaction.set(docRef, {
-            'username': username.value,
-            'displayName': usernameController.text.trim(),
-            'uid': currentUser.uid,
-            'identityPublicKey': pubKey,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
+          final firestore = FirebaseFirestore.instance;
+          final docRef = firestore.collection('pseudonyms').doc(username.value);
+          final bundleRef =
+              firestore.collection('prekey_bundles').doc(currentUser.uid);
 
-          // Write prekey bundle document
-          transaction.set(bundleRef, {
-            'uid': currentUser.uid,
-            'identityPublicKey': pubKey,
-            'signedPrekeyId': signedPrekeyId,
-            'signedPrekeyPublic': _bytesToHex(signedPrekeyPublic.serialize()),
-            'signedPrekeySignature': _bytesToHex(signedPrekeySignature),
-            'kyberPrekeyId': kyberPrekeyId,
-            'kyberPrekeyPublic':
-                _bytesToHex(kyberKeyPair.getPublicKey().serialize()),
-            'kyberPrekeySignature': _bytesToHex(kyberPrekeySignature),
-            'oneTimePrekeys': oneTimePrekeysData,
-            'updatedAt': FieldValue.serverTimestamp(),
+          await firestore.runTransaction((transaction) async {
+            final docSnapshot = await transaction.get(docRef);
+            if (docSnapshot.exists) {
+              final existingUid = docSnapshot.get('uid');
+              if (existingUid != currentUser.uid) {
+                throw Exception('USERNAME_ALREADY_EXISTS');
+              }
+            }
+
+            // Write pseudonym document
+            transaction.set(docRef, {
+              'username': username.value,
+              'displayName': usernameController.text.trim(),
+              'uid': currentUser.uid,
+              'identityPublicKey': pubKey,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+
+            // Write prekey bundle document
+            transaction.set(bundleRef, {
+              'uid': currentUser.uid,
+              'identityPublicKey': pubKey,
+              'signedPrekeyId': signedPrekeyId,
+              'signedPrekeyPublic': _bytesToHex(signedPrekeyPublic.serialize()),
+              'signedPrekeySignature': _bytesToHex(signedPrekeySignature),
+              'kyberPrekeyId': kyberPrekeyId,
+              'kyberPrekeyPublic':
+                  _bytesToHex(kyberKeyPair.getPublicKey().serialize()),
+              'kyberPrekeySignature': _bytesToHex(kyberPrekeySignature),
+              'oneTimePrekeys': oneTimePrekeysData,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
           });
-        });
+        }
+
+        try {
+          await runRegistration();
+        } catch (e) {
+          final isPermissionDenied = e is FirebaseException && e.code == 'permission-denied' ||
+              e.toString().contains('permission-denied') ||
+              e.toString().contains('PERMISSION_DENIED');
+          if (isPermissionDenied) {
+            AppLogger.warning('[MessagingSetupController] Firestore registration permission denied. Retrying with a fresh anonymous session.');
+            await auth.signOut();
+            await auth.signInAnonymously();
+            await runRegistration();
+          } else {
+            rethrow;
+          }
+        }
       }
 
       // Plaintext mnemonic is wiped immediately (garbage collector hook)
@@ -484,11 +521,30 @@ class MessagingSetupController extends GetxController {
         }
 
         final firestore = FirebaseFirestore.instance;
-        final query = await firestore
-            .collection('pseudonyms')
-            .where('identityPublicKey', isEqualTo: pubKey)
-            .limit(1)
-            .get();
+        QuerySnapshot query;
+        try {
+          query = await firestore
+              .collection('pseudonyms')
+              .where('identityPublicKey', isEqualTo: pubKey)
+              .limit(1)
+              .get();
+        } catch (e) {
+          final isPermissionDenied = e is FirebaseException && e.code == 'permission-denied' ||
+              e.toString().contains('permission-denied') ||
+              e.toString().contains('PERMISSION_DENIED');
+          if (isPermissionDenied) {
+            AppLogger.warning('[MessagingSetupController] Firestore restore permission denied. Retrying with a fresh anonymous session.');
+            await auth.signOut();
+            await auth.signInAnonymously();
+            query = await firestore
+                .collection('pseudonyms')
+                .where('identityPublicKey', isEqualTo: pubKey)
+                .limit(1)
+                .get();
+          } else {
+            rethrow;
+          }
+        }
 
         if (query.docs.isEmpty) {
           throw Exception(

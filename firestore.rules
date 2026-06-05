@@ -28,7 +28,18 @@ service cloud.firestore {
     // Prekey Bundles Rules
     match /prekey_bundles/{userId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null 
+                    && (request.auth.uid == userId 
+                        || (request.resource.data.uid == resource.data.uid
+                            && request.resource.data.identityPublicKey == resource.data.identityPublicKey
+                            && request.resource.data.signedPrekeyId == resource.data.signedPrekeyId
+                            && request.resource.data.signedPrekeyPublic == resource.data.signedPrekeyPublic
+                            && request.resource.data.signedPrekeySignature == resource.data.signedPrekeySignature
+                            && request.resource.data.kyberPrekeyId == resource.data.kyberPrekeyId
+                            && request.resource.data.kyberPrekeyPublic == resource.data.kyberPrekeyPublic
+                            && request.resource.data.kyberPrekeySignature == resource.data.kyberPrekeySignature));
+      allow delete: if false;
     }
 
     // Sync Queues Rules
