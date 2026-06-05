@@ -28,18 +28,34 @@ Future<void> main() async {
 
   // --- Firebase initialization (must come before observability outputs for Crashlytics) ---
   PerformanceTracker.start('startup_firebase');
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  bool firebaseReady = false;
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    firebaseReady = true;
+  } catch (e, st) {
+    // Firebase.initializeApp can throw if Crashlytics is not enabled in Console.
+    debugPrint('[MemoVault-Staging] Firebase.initializeApp failed: $e\n$st');
+  }
   final firebaseMs =
       PerformanceTracker.finish('startup_firebase')?.inMilliseconds ?? 0;
 
   // --- Observability bootstrap ---
-  // Staging: console + Crashlytics (warning+, ≤30 days, per ADR-013).
+  // Staging: console always enabled for adb logcat diagnostics.
   AppLogger.addOutput(ConsoleOutput());
-  AppLogger.addOutput(CrashlyticsOutput());
-  // Staging: analytics enabled via Firebase.
-  Get.put<AnalyticsService>(FirebaseAnalyticsService(), permanent: true);
+  if (firebaseReady) {
+    try {
+      // Staging: Crashlytics for warning+ events (≤30 days, per ADR-013).
+      AppLogger.addOutput(CrashlyticsOutput());
+    } catch (e) {
+      debugPrint('[MemoVault-Staging] Crashlytics unavailable: $e');
+    }
+  }
+  // Staging: analytics enabled via Firebase (only if init succeeded).
+  if (firebaseReady) {
+    Get.put<AnalyticsService>(FirebaseAnalyticsService(), permanent: true);
+  }
 
   // Intercept Flutter framework errors (synchronous widget/layout errors).
   FlutterError.onError = (details) {
