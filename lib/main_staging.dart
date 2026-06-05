@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:libsignal/libsignal.dart';
 import 'package:memovault/app.dart';
 import 'package:memovault/core/config/env_config.dart';
 import 'package:memovault/core/observability/app_logger.dart';
@@ -22,21 +23,39 @@ import 'package:memovault/firebase_options_staging.dart';
 /// Firebase project: flutterpay-83bad  |  App: com.memovault.staging
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LibSignal.init();
   EnvConfig.initialize(Environment.staging);
 
   // --- Firebase initialization (must come before observability outputs for Crashlytics) ---
   PerformanceTracker.start('startup_firebase');
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  final firebaseMs = PerformanceTracker.finish('startup_firebase')?.inMilliseconds ?? 0;
+  bool firebaseReady = false;
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    firebaseReady = true;
+  } catch (e, st) {
+    // Firebase.initializeApp can throw if Crashlytics is not enabled in Console.
+    debugPrint('[MemoVault-Staging] Firebase.initializeApp failed: $e\n$st');
+  }
+  final firebaseMs =
+      PerformanceTracker.finish('startup_firebase')?.inMilliseconds ?? 0;
 
   // --- Observability bootstrap ---
-  // Staging: console + Crashlytics (warning+, ≤30 days, per ADR-013).
+  // Staging: console always enabled for adb logcat diagnostics.
   AppLogger.addOutput(ConsoleOutput());
-  AppLogger.addOutput(CrashlyticsOutput());
-  // Staging: analytics enabled via Firebase.
-  Get.put<AnalyticsService>(FirebaseAnalyticsService(), permanent: true);
+  if (firebaseReady) {
+    try {
+      // Staging: Crashlytics for warning+ events (≤30 days, per ADR-013).
+      AppLogger.addOutput(CrashlyticsOutput());
+    } catch (e) {
+      debugPrint('[MemoVault-Staging] Crashlytics unavailable: $e');
+    }
+  }
+  // Staging: analytics enabled via Firebase (only if init succeeded).
+  if (firebaseReady) {
+    Get.put<AnalyticsService>(FirebaseAnalyticsService(), permanent: true);
+  }
 
   // Intercept Flutter framework errors (synchronous widget/layout errors).
   FlutterError.onError = (details) {
@@ -62,7 +81,8 @@ Future<void> main() async {
   PerformanceTracker.start('startup_secure_storage');
   Get.put<SecureStorageService>(SecureStorageServiceImpl(), permanent: true);
   AppLogger.info('startup_secure_storage_ms', metadata: {
-    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ?? 0,
+    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ??
+        0,
   });
 
   // 2. Preferences
@@ -85,7 +105,8 @@ Future<void> main() async {
   // 4. Theme
   Get.put<ThemeService>(ThemeService(), permanent: true);
 
-  final totalMs = PerformanceTracker.finish('startup_total')?.inMilliseconds ?? 0;
+  final totalMs =
+      PerformanceTracker.finish('startup_total')?.inMilliseconds ?? 0;
   AppLogger.info('App bootstrap complete', metadata: {
     'startup_total_ms': totalMs,
   });

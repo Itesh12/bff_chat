@@ -70,7 +70,16 @@ class SignalSyncService extends GetxService {
         .orderBy('createdAt', descending: false)
         .snapshots()
         .listen((snapshot) async {
-      for (final doc in snapshot.docs) {
+      final sortedDocs = [...snapshot.docs]..sort((a, b) {
+        final aData = a.data() as Map<String, dynamic>? ?? {};
+        final bData = b.data() as Map<String, dynamic>? ?? {};
+        final aIsHandshake = (aData['type'] as int?) == 3 && aData['senderUsername'] != null;
+        final bIsHandshake = (bData['type'] as int?) == 3 && bData['senderUsername'] != null;
+        if (aIsHandshake && !bIsHandshake) return -1;
+        if (!aIsHandshake && bIsHandshake) return 1;
+        return 0;
+      });
+      for (final doc in sortedDocs) {
         if (!doc.exists) continue;
         try {
           await _processSyncMessage(doc, currentUid);
@@ -159,7 +168,13 @@ class SignalSyncService extends GetxService {
       final queue = SignalSessionManager.mockSyncQueues![currentUid];
       if (queue != null) {
         // Process a copy to prevent concurrent modification
-        final copy = List<Map<String, dynamic>>.from(queue);
+        final copy = List<Map<String, dynamic>>.from(queue)..sort((a, b) {
+          final aIsHandshake = (a['type'] as int?) == 3 && a['senderUsername'] != null;
+          final bIsHandshake = (b['type'] as int?) == 3 && b['senderUsername'] != null;
+          if (aIsHandshake && !bIsHandshake) return -1;
+          if (!aIsHandshake && bIsHandshake) return 1;
+          return 0;
+        });
         for (final item in copy) {
           final doc = _FakeDocumentSnapshot(
             docId: item['id'] as String,

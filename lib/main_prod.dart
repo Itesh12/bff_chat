@@ -2,9 +2,11 @@ import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:libsignal/libsignal.dart';
 import 'package:memovault/app.dart';
 import 'package:memovault/core/config/env_config.dart';
 import 'package:memovault/core/observability/app_logger.dart';
+import 'package:memovault/core/observability/console_output.dart';
 import 'package:memovault/core/observability/crashlytics_output.dart';
 import 'package:memovault/core/observability/performance_tracker.dart';
 import 'package:memovault/core/services/analytics_service.dart';
@@ -21,21 +23,47 @@ import 'package:memovault/firebase_options_prod.dart';
 /// Firebase project: flutterpay-83bad  |  App: com.memovault
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LibSignal.init();
   EnvConfig.initialize(Environment.prod);
 
   // --- Firebase initialization (must come before observability outputs for Crashlytics) ---
   PerformanceTracker.start('startup_firebase');
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  bool firebaseReady = false;
+  bool crashlyticsReady = false;
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    firebaseReady = true;
+  } catch (e, st) {
+    // Firebase.initializeApp can throw if a registered plugin (e.g. Crashlytics)
+    // is not enabled in the Firebase Console. Fall back to console logging.
+    debugPrint('[MemoVault] Firebase.initializeApp failed: $e\n$st');
+  }
   final firebaseMs = PerformanceTracker.finish('startup_firebase')?.inMilliseconds ?? 0;
 
   // --- Observability bootstrap ---
-  // Production: Crashlytics only — no console output (ADR-013 retention policy:
-  // no local persistent logs, metadata-bound error reporting only).
-  AppLogger.addOutput(CrashlyticsOutput());
-  // Production: analytics enabled via Firebase.
-  Get.put<AnalyticsService>(FirebaseAnalyticsService(), permanent: true);
+  if (firebaseReady) {
+    try {
+      // Production: Crashlytics only — no console output (ADR-013 retention policy:
+      // no local persistent logs, metadata-bound error reporting only).
+      AppLogger.addOutput(CrashlyticsOutput());
+      crashlyticsReady = true;
+    } catch (e) {
+      // Crashlytics component not present (not enabled in Firebase Console).
+      // Fall back to console output so errors are still visible via adb logcat.
+      debugPrint('[MemoVault] Crashlytics unavailable, falling back to console: $e');
+      AppLogger.addOutput(ConsoleOutput());
+    }
+  } else {
+    // Firebase failed entirely — use console output as safety net.
+    AppLogger.addOutput(ConsoleOutput());
+  }
+
+  // Production: analytics enabled via Firebase (only if Firebase init succeeded).
+  if (firebaseReady) {
+    Get.put<AnalyticsService>(FirebaseAnalyticsService(), permanent: true);
+  }
 
   // Intercept Flutter framework errors (synchronous widget/layout errors).
   FlutterError.onError = (details) {
@@ -55,7 +83,11 @@ Future<void> main() async {
   // ── Bootstrap sequence with per-phase timing ───────────────────────────────
   PerformanceTracker.start('startup_total');
 
-  AppLogger.info('startup_firebase_ms', metadata: {'ms': firebaseMs});
+  AppLogger.info('startup_firebase_ms', metadata: {
+    'ms': firebaseMs,
+    'firebase_ready': firebaseReady,
+    'crashlytics_ready': crashlyticsReady,
+  });
 
   // 1. Secure storage (provides encryption key to DatabaseService)
   PerformanceTracker.start('startup_secure_storage');

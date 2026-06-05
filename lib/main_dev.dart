@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:libsignal/libsignal.dart';
 import 'package:memovault/app.dart';
 import 'package:memovault/core/config/env_config.dart';
 import 'package:memovault/core/observability/app_logger.dart';
@@ -25,6 +26,7 @@ import 'package:memovault/core/services/theme_service.dart';
 ///   - Per-phase startup timing logged to console for performance analysis.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LibSignal.init();
   EnvConfig.initialize(Environment.dev);
 
   // Dev: console-only observability — no network telemetry (ADR-013).
@@ -56,7 +58,8 @@ Future<void> main() async {
   PerformanceTracker.start('startup_secure_storage');
   Get.put<SecureStorageService>(SecureStorageServiceImpl(), permanent: true);
   AppLogger.info('startup_secure_storage_ms', metadata: {
-    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ?? 0,
+    'ms': PerformanceTracker.finish('startup_secure_storage')?.inMilliseconds ??
+        0,
   });
 
   // 2. Preferences — lightweight shared prefs, no encryption key dependency.

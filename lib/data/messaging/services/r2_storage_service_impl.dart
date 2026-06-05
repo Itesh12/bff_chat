@@ -4,9 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:memovault/core/config/env_config.dart';
 import 'package:memovault/core/observability/app_logger.dart';
-import 'package:memovault/domain/messaging/services/r2_storage_service.dart';
+import 'package:memovault/domain/messaging/services/media_storage_service.dart';
 
-class R2StorageServiceImpl implements R2StorageService {
+class R2StorageServiceImpl implements MediaStorageService {
   static const String mockScheme = 'mock-r2://';
 
   // Directory used to simulate R2 storage in local/test/development configurations
@@ -206,7 +206,8 @@ class R2StorageServiceImpl implements R2StorageService {
   }
 
   /// Downloads a mock or real R2 blob into a destination local file path.
-  static Future<void> downloadBlobToLocalFile({
+  @override
+  Future<void> downloadBlobToLocalFile({
     required String remoteUrl,
     required File destinationFile,
   }) async {

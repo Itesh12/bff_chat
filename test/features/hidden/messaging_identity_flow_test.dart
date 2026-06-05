@@ -312,6 +312,26 @@ void main() {
       await identityService.saveIdentityKeys(pubKey: 'pub', privKey: 'priv');
       await identityService.setSetupState(MessagingSetupState.ready);
 
+      // Write additional keys that must be cleaned
+      await fakeStorage.write('messaging_registration_id', '12345');
+      await fakeStorage.write('messaging_last_prekey_rotation_timestamp', '999999');
+      await identityService.saveSignedPreKey(
+        id: 1,
+        privKeyHex: 'priv_sp_1',
+        pubKeyHex: 'pub_sp_1',
+        signatureHex: 'sig_sp_1',
+        timestampMs: 12345,
+      );
+      await fakeStorage.write('signed_prekey_record_1', 'hex_record_1');
+      await identityService.saveKyberPreKey(
+        id: 1,
+        privKeyHex: 'priv_kp_1',
+        pubKeyHex: 'pub_kp_1',
+        signatureHex: 'sig_kp_1',
+        timestampMs: 12345,
+      );
+      await fakeStorage.write('kyber_prekey_record_1', 'hex_record_1');
+
       expect(await identityService.getUsername(), '@alice');
       expect(await identityService.getDisplayName(), 'Alice');
       expect(await identityService.getPublicKey(), 'pub');
@@ -333,6 +353,12 @@ void main() {
       expect(await identityService.getDisplayName(), isNull);
       expect(await identityService.getPublicKey(), isNull);
       expect(await identityService.getSetupState(), MessagingSetupState.unconfigured);
+
+      // Assert extra messaging keys are wiped
+      expect(await fakeStorage.read('messaging_registration_id'), isNull);
+      expect(await fakeStorage.read('messaging_last_prekey_rotation_timestamp'), isNull);
+      expect(await fakeStorage.read('signed_prekey_record_1'), isNull);
+      expect(await fakeStorage.read('kyber_prekey_record_1'), isNull);
     });
   });
 }

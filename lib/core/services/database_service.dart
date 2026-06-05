@@ -479,6 +479,15 @@ class DatabaseService extends GetxService {
     }
   }
 
+  /// Wipes the main app database and its encryption key from secure storage.
+  Future<void> wipeDatabase() async {
+    await close();
+    final secureStorage = Get.find<SecureStorageService>();
+    final dbDir = await getApplicationDocumentsDirectory();
+    final dbPath = '${dbDir.path}/$_kDatabaseFileName';
+    await _wipeDatabase(dbPath, secureStorage);
+  }
+
   /// Closes the database connection and resets internal references.
   Future<void> close() async {
     if (_db != null) {

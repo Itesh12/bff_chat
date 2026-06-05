@@ -42,7 +42,7 @@ void main() {
       expect(remoteUrl, 'mock-r2://$objectKey');
 
       final downloadFile = File('${testDirectory.path}/test_download.txt');
-      await R2StorageServiceImpl.downloadBlobToLocalFile(
+      await storageService.downloadBlobToLocalFile(
         remoteUrl: remoteUrl,
         destinationFile: downloadFile,
       );
@@ -133,7 +133,7 @@ void main() {
       expect(remoteUrl, '$serverUrl/test_blob.enc');
 
       final downloadFile = File('${testDirectory.path}/test_download_real.enc');
-      await R2StorageServiceImpl.downloadBlobToLocalFile(
+      await storageService.downloadBlobToLocalFile(
         remoteUrl: remoteUrl,
         destinationFile: downloadFile,
       );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:memovault/core/design_system/feedback/app_snack_bar.dart';
@@ -346,11 +347,13 @@ class HiddenChatController extends GetxController {
           await identityService.getSetupState() == MessagingSetupState.ready;
 
       if (isSecureReady && p != null) {
-        final sessionManager = Get.find<SignalSessionManager>();
-        await sessionManager.sendSecureMessage(
-          targetUid: p.id,
-          plaintext: text,
-        );
+        if (Firebase.apps.isNotEmpty) {
+          final sessionManager = Get.find<SignalSessionManager>();
+          await sessionManager.sendSecureMessage(
+            targetUid: p.id,
+            plaintext: text,
+          );
+        }
         await _messagingRepository.updateMessageState(msgId, 'sent');
       } else {
         // Fallback for local-only mock mode
@@ -496,11 +499,13 @@ class HiddenChatController extends GetxController {
           await identityService.getSetupState() == MessagingSetupState.ready;
 
       if (isSecureReady && p != null) {
-        final sessionManager = Get.find<SignalSessionManager>();
-        await sessionManager.sendSecureMediaMessage(
-          targetUid: p.id,
-          attachment: completedAttachment,
-        );
+        if (Firebase.apps.isNotEmpty) {
+          final sessionManager = Get.find<SignalSessionManager>();
+          await sessionManager.sendSecureMediaMessage(
+            targetUid: p.id,
+            attachment: completedAttachment,
+          );
+        }
         await _messagingRepository.updateMessageState(msgId, 'sent');
       } else {
         // Fallback for local/mock mode
@@ -714,11 +719,13 @@ class HiddenChatController extends GetxController {
           await identityService.getSetupState() == MessagingSetupState.ready;
 
       if (isSecureReady && p != null) {
-        final sessionManager = Get.find<SignalSessionManager>();
-        await sessionManager.sendSecureMediaMessage(
-          targetUid: p.id,
-          attachment: completedAttachment,
-        );
+        if (Firebase.apps.isNotEmpty) {
+          final sessionManager = Get.find<SignalSessionManager>();
+          await sessionManager.sendSecureMediaMessage(
+            targetUid: p.id,
+            attachment: completedAttachment,
+          );
+        }
         await _messagingRepository.updateMessageState(msgId, 'sent');
       } else {
         // Fallback for local/mock mode

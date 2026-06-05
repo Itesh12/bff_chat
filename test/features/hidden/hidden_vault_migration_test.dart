@@ -155,9 +155,12 @@ void main() {
       await db.customStatement("INSERT INTO signal_skipped_keys (sender_id, ratchet_key, sequence_number, key_bytes, created_at) VALUES ('p1', 'ratchet_key_hex', 10, x'90ab', 1680000000);");
 
       final partRows = await db.customSelect('SELECT * FROM participants').get();
-      expect(partRows.length, 1);
-      expect(partRows.first.read<String>('username'), '@alice');
-      expect(partRows.first.read<String>('trust_state'), 'accepted');
+      expect(partRows.length, 2);
+      final aliceRow = partRows.firstWhere((r) => r.read<String>('id') == 'p1');
+      expect(aliceRow.read<String>('username'), '@alice');
+      expect(aliceRow.read<String>('trust_state'), 'accepted');
+      final meRow = partRows.firstWhere((r) => r.read<String>('id') == 'me');
+      expect(meRow.read<String>('username'), 'me');
 
       final convRows = await db.customSelect('SELECT * FROM conversations').get();
       expect(convRows.length, 1);

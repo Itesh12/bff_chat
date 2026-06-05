@@ -10,6 +10,9 @@ import 'package:memovault/features/hidden/data/hidden_categories_dao.dart';
 import 'package:memovault/features/hidden/data/hidden_vault_database.dart';
 import 'package:memovault/features/hidden/domain/entities/hidden_vault_config.dart';
 import 'package:memovault/features/hidden/services/pin_hashing_service.dart';
+import 'package:memovault/core/services/database_service.dart';
+import 'package:memovault/features/hidden/services/messaging_identity_service.dart';
+import 'package:memovault/data/messaging/services/media_transfer_service_impl.dart';
 import 'package:crypto/crypto.dart';
 
 const _kHiddenVaultConfigKey = 'hidden_vault_config_v1';
@@ -120,11 +123,33 @@ class HiddenVaultService extends GetxService {
 
   /// Performs a panic wipe. Wipes the database files, config, and encryption keys from secure storage.
   Future<void> panicWipe() async {
+    // 1. Lock/close hidden vault db
     await lockVault();
+
+    // 2. Delete main app database and its secure storage key
+    try {
+      if (Get.isRegistered<DatabaseService>()) {
+        await Get.find<DatabaseService>().wipeDatabase();
+      }
+    } catch (e) {
+      AppLogger.warning('[HiddenVaultService] Panic wipe: failed to wipe main database', error: e);
+    }
+
+    // 3. Reset Signal identity and session keys
+    try {
+      if (Get.isRegistered<MessagingIdentityService>()) {
+        await Get.find<MessagingIdentityService>().resetIdentity();
+      }
+    } catch (e) {
+      AppLogger.warning('[HiddenVaultService] Panic wipe: failed to reset messaging identity', error: e);
+    }
+
+    // 4. Delete hidden vault secure storage keys
     await _secureStorage.delete(_kHiddenVaultConfigKey);
     await _secureStorage.delete(_kHiddenVaultKeyStorageKey);
     await _secureStorage.delete(_kHiddenVaultKeyVersionKey);
 
+    // 5. Delete hidden vault database files
     final dbDir = await getApplicationDocumentsDirectory();
     final dbPath = '${dbDir.path}/$_kHiddenVaultDbName';
 
@@ -142,6 +167,19 @@ class HiddenVaultService extends GetxService {
         }
       }
     }
+
+    // 6. Purge decrypted cache
+    await MediaTransferServiceImpl.purgeDecryptedCache();
+
+    // 7. Delete local mock R2 directory if it exists
+    final tempDir = Directory.systemTemp.path;
+    final mockR2Dir = Directory('$tempDir/memovault_mock_r2');
+    if (mockR2Dir.existsSync()) {
+      try {
+        mockR2Dir.deleteSync(recursive: true);
+      } catch (_) {}
+    }
+
     AppLogger.warning('[HiddenVaultService] Panic wipe executed. All hidden data destroyed.');
   }
 }

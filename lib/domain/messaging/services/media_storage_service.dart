@@ -1,7 +1,6 @@
 import 'dart:io';
 
-@deprecated
-abstract class R2StorageService {
+abstract class MediaStorageService {
   Future<String> uploadBlob({
     required File file,
     required String objectKey,
@@ -11,5 +10,10 @@ abstract class R2StorageService {
 
   Future<void> deleteBlob({
     required String objectKey,
+  });
+
+  Future<void> downloadBlobToLocalFile({
+    required String remoteUrl,
+    required File destinationFile,
   });
 }
