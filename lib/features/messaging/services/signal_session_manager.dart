@@ -49,242 +49,274 @@ class SignalSessionManager {
     required String targetUsername,
     required bool isHidden,
   }) async {
-    final currentUid = Firebase.apps.isEmpty
-        ? 'alice_uid'
-        : FirebaseAuth.instance.currentUser!.uid;
-
-    // 1. Resolve Target Pseudonym
-    final String bobUid;
-    final String bobIdentityKeyPub;
-
-    if (Firebase.apps.isEmpty && mockPseudonyms != null) {
-      final doc = mockPseudonyms![targetUsername];
-      if (doc == null) throw Exception('Target username not found in directory.');
-      bobUid = doc['uid'] as String;
-      bobIdentityKeyPub = doc['identityPublicKey'] as String;
-    } else if (Firebase.apps.isNotEmpty) {
-      final firestore = FirebaseFirestore.instance;
-      final pseudonymDoc = await firestore.collection('pseudonyms').doc(targetUsername).get();
-      if (!pseudonymDoc.exists) {
-        throw Exception('Target username not found in directory.');
+    if (Firebase.apps.isNotEmpty) {
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser == null) {
+        await auth.signInAnonymously();
       }
-      bobUid = pseudonymDoc.get('uid') as String;
-      bobIdentityKeyPub = pseudonymDoc.get('identityPublicKey') as String;
-    } else {
-      throw Exception('[SignalSessionManager] Firebase not available and no mock data. Cannot resolve pseudonym for $targetUsername.');
     }
 
-    // 2. Check for contact blocking gate (Point 5)
-    final conversationId = '${currentUid}_$bobUid';
-    final existingConv = await _messagingRepository.getConversationById(conversationId);
-    if (existingConv != null && existingConv.isBlocked) {
-      throw StateError('BLOCKED_CONTACT');
-    }
+    int retryCount = 0;
+    while (true) {
+      try {
+        final currentUid = Firebase.apps.isEmpty
+            ? 'alice_uid'
+            : FirebaseAuth.instance.currentUser!.uid;
 
-    // Detect identity key change under ADR-022:
-    final existingContact = await _messagingRepository.getParticipantById(bobUid);
-    if (existingContact != null && existingContact.identityKeyPub != bobIdentityKeyPub) {
-      // Identity key changed! Set trustState to 'revoked' to trigger safety warning
-      await _messagingRepository.createOrUpdateParticipant(
-        id: bobUid,
-        username: targetUsername,
-        identityKeyPub: existingContact.identityKeyPub, // Keep original key for warnings
-        trustState: 'revoked',
-      );
-      throw StateError('IDENTITY_KEY_CHANGED');
-    }
+        // 1. Resolve Target Pseudonym
+        final String bobUid;
+        final String bobIdentityKeyPub;
 
-    // 3. Fetch and Reserve OTP Atomically using Transaction (Concurrency Protection)
-    final String identityKeyPubHex;
-    final int signedPrekeyId;
-    final String signedPrekeyPublicHex;
-    final String signedPrekeySignatureHex;
-    final int kyberPrekeyId;
-    final String kyberPrekeyPublicHex;
-    final String kyberPrekeySignatureHex;
-    int? selectedPreKeyId;
-    Uint8List? selectedPreKeyPublic;
-
-    if (Firebase.apps.isEmpty && mockPrekeyBundles != null) {
-      final doc = mockPrekeyBundles![bobUid];
-      if (doc == null) throw Exception('Prekey bundle not found for target user.');
-      identityKeyPubHex = doc['identityPublicKey'] as String;
-      signedPrekeyId = doc['signedPrekeyId'] as int;
-      signedPrekeyPublicHex = doc['signedPrekeyPublic'] as String;
-      signedPrekeySignatureHex = doc['signedPrekeySignature'] as String;
-      kyberPrekeyId = doc['kyberPrekeyId'] as int;
-      kyberPrekeyPublicHex = doc['kyberPrekeyPublic'] as String;
-      kyberPrekeySignatureHex = doc['kyberPrekeySignature'] as String;
-
-      final otps = doc['oneTimePrekeys'] as List<dynamic>;
-      if (otps.isNotEmpty) {
-        final first = otps.removeAt(0) as Map<String, dynamic>;
-        selectedPreKeyId = first['id'] as int;
-        selectedPreKeyPublic = _hexToBytes(first['publicKey'] as String);
-      }
-    } else if (Firebase.apps.isNotEmpty) {
-      final firestore = FirebaseFirestore.instance;
-      final bundleRef = firestore.collection('prekey_bundles').doc(bobUid);
-
-      final transactionResult = await firestore.runTransaction((transaction) async {
-        final bundleDoc = await transaction.get(bundleRef);
-        if (!bundleDoc.exists) {
-          throw Exception('Prekey bundle not found for target user.');
+        if (Firebase.apps.isEmpty && mockPseudonyms != null) {
+          final doc = mockPseudonyms![targetUsername];
+          if (doc == null) throw Exception('Target username not found in directory.');
+          bobUid = doc['uid'] as String;
+          bobIdentityKeyPub = doc['identityPublicKey'] as String;
+        } else if (Firebase.apps.isNotEmpty) {
+          final firestore = FirebaseFirestore.instance;
+          final pseudonymDoc = await firestore.collection('pseudonyms').doc(targetUsername).get();
+          if (!pseudonymDoc.exists) {
+            throw Exception('Target username not found in directory.');
+          }
+          bobUid = pseudonymDoc.get('uid') as String;
+          bobIdentityKeyPub = pseudonymDoc.get('identityPublicKey') as String;
+        } else {
+          throw Exception('[SignalSessionManager] Firebase not available and no mock data. Cannot resolve pseudonym for $targetUsername.');
         }
 
-        final idPubKeyHex = bundleDoc.get('identityPublicKey') as String;
-        final spKeyId = bundleDoc.get('signedPrekeyId') as int;
-        final spKeyPubHex = bundleDoc.get('signedPrekeyPublic') as String;
-        final spKeySigHex = bundleDoc.get('signedPrekeySignature') as String;
-        final kpKeyId = bundleDoc.get('kyberPrekeyId') as int;
-        final kpKeyPubHex = bundleDoc.get('kyberPrekeyPublic') as String;
-        final kpKeySigHex = bundleDoc.get('kyberPrekeySignature') as String;
-        final oneTimePrekeys = bundleDoc.get('oneTimePrekeys') as List<dynamic>? ?? [];
+        // 2. Check for contact blocking gate (Point 5)
+        final conversationId = '${currentUid}_$bobUid';
+        final existingConv = await _messagingRepository.getConversationById(conversationId);
+        if (existingConv != null && existingConv.isBlocked) {
+          throw StateError('BLOCKED_CONTACT');
+        }
 
-        Map<String, dynamic>? chosenOtp;
-        if (oneTimePrekeys.isNotEmpty) {
-          chosenOtp = Map<String, dynamic>.from(oneTimePrekeys.first as Map);
-          // Atomically remove the chosen OTP from Firestore
-          transaction.update(bundleRef, {
-            'oneTimePrekeys': FieldValue.arrayRemove([chosenOtp]),
+        // Detect identity key change under ADR-022:
+        final existingContact = await _messagingRepository.getParticipantById(bobUid);
+        if (existingContact != null && existingContact.identityKeyPub != bobIdentityKeyPub) {
+          // Identity key changed! Set trustState to 'revoked' to trigger safety warning
+          await _messagingRepository.createOrUpdateParticipant(
+            id: bobUid,
+            username: targetUsername,
+            identityKeyPub: existingContact.identityKeyPub, // Keep original key for warnings
+            trustState: 'revoked',
+          );
+          throw StateError('IDENTITY_KEY_CHANGED');
+        }
+
+        // 3. Fetch and Reserve OTP Atomically using Transaction (Concurrency Protection)
+        final String identityKeyPubHex;
+        final int signedPrekeyId;
+        final String signedPrekeyPublicHex;
+        final String signedPrekeySignatureHex;
+        final int kyberPrekeyId;
+        final String kyberPrekeyPublicHex;
+        final String kyberPrekeySignatureHex;
+        int? selectedPreKeyId;
+        Uint8List? selectedPreKeyPublic;
+
+        if (Firebase.apps.isEmpty && mockPrekeyBundles != null) {
+          final doc = mockPrekeyBundles![bobUid];
+          if (doc == null) throw Exception('Prekey bundle not found for target user.');
+          identityKeyPubHex = doc['identityPublicKey'] as String;
+          signedPrekeyId = doc['signedPrekeyId'] as int;
+          signedPrekeyPublicHex = doc['signedPrekeyPublic'] as String;
+          signedPrekeySignatureHex = doc['signedPrekeySignature'] as String;
+          kyberPrekeyId = doc['kyberPrekeyId'] as int;
+          kyberPrekeyPublicHex = doc['kyberPrekeyPublic'] as String;
+          kyberPrekeySignatureHex = doc['kyberPrekeySignature'] as String;
+
+          final otps = doc['oneTimePrekeys'] as List<dynamic>;
+          if (otps.isNotEmpty) {
+            final first = otps.removeAt(0) as Map<String, dynamic>;
+            selectedPreKeyId = first['id'] as int;
+            selectedPreKeyPublic = _hexToBytes(first['publicKey'] as String);
+          }
+        } else if (Firebase.apps.isNotEmpty) {
+          final firestore = FirebaseFirestore.instance;
+          final bundleRef = firestore.collection('prekey_bundles').doc(bobUid);
+
+          final transactionResult = await firestore.runTransaction((transaction) async {
+            final bundleDoc = await transaction.get(bundleRef);
+            if (!bundleDoc.exists) {
+              throw Exception('Prekey bundle not found for target user.');
+            }
+
+            final idPubKeyHex = bundleDoc.get('identityPublicKey') as String;
+            final spKeyId = bundleDoc.get('signedPrekeyId') as int;
+            final spKeyPubHex = bundleDoc.get('signedPrekeyPublic') as String;
+            final spKeySigHex = bundleDoc.get('signedPrekeySignature') as String;
+            final kpKeyId = bundleDoc.get('kyberPrekeyId') as int;
+            final kpKeyPubHex = bundleDoc.get('kyberPrekeyPublic') as String;
+            final kpKeySigHex = bundleDoc.get('kyberPrekeySignature') as String;
+            final oneTimePrekeys = bundleDoc.get('oneTimePrekeys') as List<dynamic>? ?? [];
+
+            Map<String, dynamic>? chosenOtp;
+            if (oneTimePrekeys.isNotEmpty) {
+              chosenOtp = Map<String, dynamic>.from(oneTimePrekeys.first as Map);
+              // Atomically remove the chosen OTP from Firestore
+              transaction.update(bundleRef, {
+                'oneTimePrekeys': FieldValue.arrayRemove([chosenOtp]),
+              });
+            }
+
+            return {
+              'identityKeyPubHex': idPubKeyHex,
+              'signedPrekeyId': spKeyId,
+              'signedPrekeyPublicHex': spKeyPubHex,
+              'signedPrekeySignatureHex': spKeySigHex,
+              'kyberPrekeyId': kpKeyId,
+              'kyberPrekeyPublicHex': kpKeyPubHex,
+              'kyberPrekeySignatureHex': kpKeySigHex,
+              'chosenOtp': chosenOtp,
+            };
           });
+
+          identityKeyPubHex = transactionResult['identityKeyPubHex']! as String;
+          signedPrekeyId = transactionResult['signedPrekeyId']! as int;
+          signedPrekeyPublicHex = transactionResult['signedPrekeyPublicHex']! as String;
+          signedPrekeySignatureHex = transactionResult['signedPrekeySignatureHex']! as String;
+          kyberPrekeyId = transactionResult['kyberPrekeyId']! as int;
+          kyberPrekeyPublicHex = transactionResult['kyberPrekeyPublicHex']! as String;
+          kyberPrekeySignatureHex = transactionResult['kyberPrekeySignatureHex']! as String;
+
+          final chosenOtp = transactionResult['chosenOtp'] as Map<String, dynamic>?;
+          if (chosenOtp != null) {
+            selectedPreKeyId = chosenOtp['id'] as int;
+            selectedPreKeyPublic = _hexToBytes(chosenOtp['publicKey'] as String);
+          }
+        } else {
+          throw Exception('[SignalSessionManager] Firebase not available and no mock data. Cannot fetch prekey bundle for $bobUid.');
         }
 
-        return {
-          'identityKeyPubHex': idPubKeyHex,
-          'signedPrekeyId': spKeyId,
-          'signedPrekeyPublicHex': spKeyPubHex,
-          'signedPrekeySignatureHex': spKeySigHex,
-          'kyberPrekeyId': kpKeyId,
-          'kyberPrekeyPublicHex': kpKeyPubHex,
-          'kyberPrekeySignatureHex': kpKeySigHex,
-          'chosenOtp': chosenOtp,
+        final identityKeyPubBytes = _hexToBytes(identityKeyPubHex);
+        final signedPrekeyPublicBytes = _hexToBytes(signedPrekeyPublicHex);
+        final signedPrekeySignatureBytes = _hexToBytes(signedPrekeySignatureHex);
+        final kyberPrekeyPublicBytes = _hexToBytes(kyberPrekeyPublicHex);
+        final kyberPrekeySignatureBytes = _hexToBytes(kyberPrekeySignatureHex);
+
+        // 4. Construct PreKeyBundle for libsignal
+        final bobBundle = PreKeyBundle(
+          registrationId: 67890,
+          deviceId: 1,
+          preKeyId: selectedPreKeyId,
+          preKeyPublic: selectedPreKeyPublic,
+          signedPreKeyId: signedPrekeyId,
+          signedPreKeyPublic: signedPrekeyPublicBytes,
+          signedPreKeySignature: signedPrekeySignatureBytes,
+          identityKey: identityKeyPubBytes,
+          kyberPreKeyId: kyberPrekeyId,
+          kyberPreKeyPublic: kyberPrekeyPublicBytes,
+          kyberPreKeySignature: kyberPrekeySignatureBytes,
+        );
+
+        // 5. Initialize Local Signal Stores
+        final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
+        final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
+        final bobAddress = ProtocolAddress(name: bobUid, deviceId: 1);
+
+        final sessionBuilder = SessionBuilder(
+          localAddress: localAddress,
+          sessionStore: signalStore,
+          identityKeyStore: signalStore,
+        );
+
+        // 6. Process Bundle to derive shared secret and initial session
+        await sessionBuilder.processPreKeyBundle(bobAddress, bobBundle);
+
+        // 7. Save Participant and Conversation Locally
+        await _messagingRepository.createOrUpdateParticipant(
+          id: bobUid,
+          username: targetUsername,
+          identityKeyPub: _bytesToHex(identityKeyPubBytes),
+          trustState: 'accepted',
+        );
+
+        await _messagingRepository.createConversation(
+          id: conversationId,
+          participantId: bobUid,
+          isHidden: isHidden,
+        );
+
+        // 8. Encrypt initial handshake message to initiate the handshake envelope
+        final sessionCipher = SessionCipher(
+          localAddress: localAddress,
+          sessionStore: signalStore,
+          identityKeyStore: signalStore,
+          preKeyStore: signalStore,
+          signedPreKeyStore: signalStore,
+          kyberPreKeyStore: signalStore,
+        );
+
+        final handshakePayload = Uint8List.fromList('handshake_init'.codeUnits);
+        final ciphertextMessage = await sessionCipher.encrypt(bobAddress, handshakePayload);
+
+        // Write a local handshake message history row
+        final localMessageId = 'h_${DateTime.now().microsecondsSinceEpoch}';
+        final localHandshakeMsg = MessageEntity(
+          id: localMessageId,
+          conversationId: conversationId,
+          senderId: 'me',
+          encryptedContent: 'Handshake initiated',
+          nonce: '',
+          state: 'sent',
+          messageType: 'handshake',
+          createdAt: DateTime.now().toUtc(),
+        );
+        await _messagingRepository.insertMessage(localHandshakeMsg);
+        await _messagingRepository.updateConversationLastMessage(conversationId, localMessageId);
+
+        // 9. Post to Bob's sync queue
+        final messageId = DateTime.now().microsecondsSinceEpoch.toString();
+        final myUsername = await _identityService.getUsername() ?? 'unknown';
+        final myPubKey = await _identityService.getPublicKey() ?? '';
+
+        final messageData = {
+          'id': messageId,
+          'senderUid': currentUid,
+          'ciphertext': _bytesToHex(ciphertextMessage.ciphertext),
+          'type': ciphertextMessage.type.value, // preKey (type 3)
+          'senderUsername': myUsername,
+          'senderIdentityKeyPubHex': myPubKey,
         };
-      });
 
-      identityKeyPubHex = transactionResult['identityKeyPubHex']! as String;
-      signedPrekeyId = transactionResult['signedPrekeyId']! as int;
-      signedPrekeyPublicHex = transactionResult['signedPrekeyPublicHex']! as String;
-      signedPrekeySignatureHex = transactionResult['signedPrekeySignatureHex']! as String;
-      kyberPrekeyId = transactionResult['kyberPrekeyId']! as int;
-      kyberPrekeyPublicHex = transactionResult['kyberPrekeyPublicHex']! as String;
-      kyberPrekeySignatureHex = transactionResult['kyberPrekeySignatureHex']! as String;
-
-      final chosenOtp = transactionResult['chosenOtp'] as Map<String, dynamic>?;
-      if (chosenOtp != null) {
-        selectedPreKeyId = chosenOtp['id'] as int;
-        selectedPreKeyPublic = _hexToBytes(chosenOtp['publicKey'] as String);
+        if (Firebase.apps.isEmpty && mockSyncQueues != null) {
+          mockSyncQueues!.putIfAbsent(bobUid, () => []).add(messageData);
+        } else if (Firebase.apps.isNotEmpty) {
+          final firestore = FirebaseFirestore.instance;
+          await firestore
+              .collection('sync_queues')
+              .doc(bobUid)
+              .collection('messages')
+              .doc(messageId)
+              .set({
+            ...messageData,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          AppLogger.warning('[SignalSessionManager] Dev mode: skipping Firestore handshake sync queue push (no Firebase, no mock).');
+        }
+        
+        break; // Success
+      } catch (e) {
+        final isPermissionDenied = e is FirebaseException && e.code == 'permission-denied' ||
+            e.toString().contains('permission-denied') ||
+            e.toString().contains('PERMISSION_DENIED');
+        if (isPermissionDenied && retryCount < 1 && Firebase.apps.isNotEmpty) {
+          retryCount++;
+          AppLogger.warning('[SignalSessionManager] initiateSession permission denied. Retrying with fresh anonymous session.');
+          final auth = FirebaseAuth.instance;
+          try {
+            await auth.signOut();
+            await auth.signInAnonymously();
+          } catch (authError) {
+            AppLogger.error('[SignalSessionManager] Failed to re-authenticate anonymously: $authError');
+            rethrow;
+          }
+        } else {
+          rethrow;
+        }
       }
-    } else {
-      throw Exception('[SignalSessionManager] Firebase not available and no mock data. Cannot fetch prekey bundle for $bobUid.');
-    }
-
-    final identityKeyPubBytes = _hexToBytes(identityKeyPubHex);
-    final signedPrekeyPublicBytes = _hexToBytes(signedPrekeyPublicHex);
-    final signedPrekeySignatureBytes = _hexToBytes(signedPrekeySignatureHex);
-    final kyberPrekeyPublicBytes = _hexToBytes(kyberPrekeyPublicHex);
-    final kyberPrekeySignatureBytes = _hexToBytes(kyberPrekeySignatureHex);
-
-    // 4. Construct PreKeyBundle for libsignal
-    final bobBundle = PreKeyBundle(
-      registrationId: 67890,
-      deviceId: 1,
-      preKeyId: selectedPreKeyId,
-      preKeyPublic: selectedPreKeyPublic,
-      signedPreKeyId: signedPrekeyId,
-      signedPreKeyPublic: signedPrekeyPublicBytes,
-      signedPreKeySignature: signedPrekeySignatureBytes,
-      identityKey: identityKeyPubBytes,
-      kyberPreKeyId: kyberPrekeyId,
-      kyberPreKeyPublic: kyberPrekeyPublicBytes,
-      kyberPreKeySignature: kyberPrekeySignatureBytes,
-    );
-
-    // 5. Initialize Local Signal Stores
-    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
-    final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
-    final bobAddress = ProtocolAddress(name: bobUid, deviceId: 1);
-
-    final sessionBuilder = SessionBuilder(
-      localAddress: localAddress,
-      sessionStore: signalStore,
-      identityKeyStore: signalStore,
-    );
-
-    // 6. Process Bundle to derive shared secret and initial session
-    await sessionBuilder.processPreKeyBundle(bobAddress, bobBundle);
-
-    // 7. Save Participant and Conversation Locally
-    await _messagingRepository.createOrUpdateParticipant(
-      id: bobUid,
-      username: targetUsername,
-      identityKeyPub: _bytesToHex(identityKeyPubBytes),
-      trustState: 'accepted',
-    );
-
-    await _messagingRepository.createConversation(
-      id: conversationId,
-      participantId: bobUid,
-      isHidden: isHidden,
-    );
-
-    // 8. Encrypt initial handshake message to initiate the handshake envelope
-    final sessionCipher = SessionCipher(
-      localAddress: localAddress,
-      sessionStore: signalStore,
-      identityKeyStore: signalStore,
-      preKeyStore: signalStore,
-      signedPreKeyStore: signalStore,
-      kyberPreKeyStore: signalStore,
-    );
-
-    final handshakePayload = Uint8List.fromList('handshake_init'.codeUnits);
-    final ciphertextMessage = await sessionCipher.encrypt(bobAddress, handshakePayload);
-
-    // Write a local handshake message history row
-    final localMessageId = 'h_${DateTime.now().microsecondsSinceEpoch}';
-    final localHandshakeMsg = MessageEntity(
-      id: localMessageId,
-      conversationId: conversationId,
-      senderId: 'me',
-      encryptedContent: 'Handshake initiated',
-      nonce: '',
-      state: 'sent',
-      messageType: 'handshake',
-      createdAt: DateTime.now().toUtc(),
-    );
-    await _messagingRepository.insertMessage(localHandshakeMsg);
-    await _messagingRepository.updateConversationLastMessage(conversationId, localMessageId);
-
-    // 9. Post to Bob's sync queue
-    final messageId = DateTime.now().microsecondsSinceEpoch.toString();
-    final myUsername = await _identityService.getUsername() ?? 'unknown';
-    final myPubKey = await _identityService.getPublicKey() ?? '';
-
-    final messageData = {
-      'id': messageId,
-      'senderUid': currentUid,
-      'ciphertext': _bytesToHex(ciphertextMessage.ciphertext),
-      'type': ciphertextMessage.type.value, // preKey (type 3)
-      'senderUsername': myUsername,
-      'senderIdentityKeyPubHex': myPubKey,
-    };
-
-    if (Firebase.apps.isEmpty && mockSyncQueues != null) {
-      mockSyncQueues!.putIfAbsent(bobUid, () => []).add(messageData);
-    } else if (Firebase.apps.isNotEmpty) {
-      final firestore = FirebaseFirestore.instance;
-      await firestore
-          .collection('sync_queues')
-          .doc(bobUid)
-          .collection('messages')
-          .doc(messageId)
-          .set({
-        ...messageData,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } else {
-      AppLogger.warning('[SignalSessionManager] Dev mode: skipping Firestore handshake sync queue push (no Firebase, no mock).');
     }
   }
 
@@ -377,72 +409,104 @@ class SignalSessionManager {
     required String targetUid,
     required String plaintext,
   }) async {
-    final currentUid = Firebase.apps.isEmpty
-        ? 'alice_uid'
-        : FirebaseAuth.instance.currentUser!.uid;
-
-    final conversationId = '${currentUid}_$targetUid';
-    final existingConv = await _messagingRepository.getConversationById(conversationId);
-    if (existingConv != null && existingConv.isBlocked) {
-      throw StateError('BLOCKED_CONTACT');
-    }
-
-    final isHidden = existingConv?.isHidden ?? true;
-    final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
-    final bobAddress = ProtocolAddress(name: targetUid, deviceId: 1);
-    final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
-
-    if (existingConv != null) {
-      final lastActive = existingConv.updatedAt;
-      final daysInactive = DateTime.now().toUtc().difference(lastActive).inDays;
-      if (daysInactive > 30) {
-        AppLogger.info('[SignalSessionManager] Session inactive for $daysInactive days (> 30 days). Rotating session.');
-        await signalStore.deleteSession(bobAddress);
+    if (Firebase.apps.isNotEmpty) {
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser == null) {
+        await auth.signInAnonymously();
       }
     }
 
-    if (!await signalStore.containsSession(bobAddress)) {
-      final participant = await _messagingRepository.getParticipantById(targetUid);
-      if (participant == null) throw Exception('Participant not found locally.');
-      final cleanUsername = participant.username.replaceAll('@', '');
-      await initiateSession(targetUsername: cleanUsername, isHidden: isHidden);
-    }
+    int retryCount = 0;
+    while (true) {
+      try {
+        final currentUid = Firebase.apps.isEmpty
+            ? 'alice_uid'
+            : FirebaseAuth.instance.currentUser!.uid;
 
-    final sessionCipher = SessionCipher(
-      localAddress: localAddress,
-      sessionStore: signalStore,
-      identityKeyStore: signalStore,
-      preKeyStore: signalStore,
-      signedPreKeyStore: signalStore,
-      kyberPreKeyStore: signalStore,
-    );
+        final conversationId = '${currentUid}_$targetUid';
+        final existingConv = await _messagingRepository.getConversationById(conversationId);
+        if (existingConv != null && existingConv.isBlocked) {
+          throw StateError('BLOCKED_CONTACT');
+        }
 
-    final messageBytes = Uint8List.fromList(plaintext.codeUnits);
-    final ciphertextMessage = await sessionCipher.encrypt(bobAddress, messageBytes);
+        final isHidden = existingConv?.isHidden ?? true;
+        final signalStore = SignalStoreImpl(_secureStorage, _identityService, _messagingRepository, isHidden: isHidden);
+        final bobAddress = ProtocolAddress(name: targetUid, deviceId: 1);
+        final localAddress = ProtocolAddress(name: currentUid, deviceId: 1);
 
-    final messageId = DateTime.now().microsecondsSinceEpoch.toString();
-    final messageData = {
-      'id': messageId,
-      'senderUid': currentUid,
-      'ciphertext': _bytesToHex(ciphertextMessage.ciphertext),
-      'type': ciphertextMessage.type.value, // whisper (type 2)
-    };
+        if (existingConv != null) {
+          final lastActive = existingConv.updatedAt;
+          final daysInactive = DateTime.now().toUtc().difference(lastActive).inDays;
+          if (daysInactive > 30) {
+            AppLogger.info('[SignalSessionManager] Session inactive for $daysInactive days (> 30 days). Rotating session.');
+            await signalStore.deleteSession(bobAddress);
+          }
+        }
 
-    if (Firebase.apps.isEmpty && mockSyncQueues != null) {
-      mockSyncQueues!.putIfAbsent(targetUid, () => []).add(messageData);
-    } else if (Firebase.apps.isNotEmpty) {
-      final firestore = FirebaseFirestore.instance;
-      await firestore
-          .collection('sync_queues')
-          .doc(targetUid)
-          .collection('messages')
-          .doc(messageId)
-          .set({
-        ...messageData,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } else {
-      AppLogger.warning('[SignalSessionManager] Dev mode: skipping Firestore secure message sync queue push (no Firebase, no mock).');
+        if (!await signalStore.containsSession(bobAddress)) {
+          final participant = await _messagingRepository.getParticipantById(targetUid);
+          if (participant == null) throw Exception('Participant not found locally.');
+          final cleanUsername = participant.username.replaceAll('@', '');
+          await initiateSession(targetUsername: cleanUsername, isHidden: isHidden);
+        }
+
+        final sessionCipher = SessionCipher(
+          localAddress: localAddress,
+          sessionStore: signalStore,
+          identityKeyStore: signalStore,
+          preKeyStore: signalStore,
+          signedPreKeyStore: signalStore,
+          kyberPreKeyStore: signalStore,
+        );
+
+        final messageBytes = Uint8List.fromList(plaintext.codeUnits);
+        final ciphertextMessage = await sessionCipher.encrypt(bobAddress, messageBytes);
+
+        final messageId = DateTime.now().microsecondsSinceEpoch.toString();
+        final messageData = {
+          'id': messageId,
+          'senderUid': currentUid,
+          'ciphertext': _bytesToHex(ciphertextMessage.ciphertext),
+          'type': ciphertextMessage.type.value, // whisper (type 2)
+        };
+
+        if (Firebase.apps.isEmpty && mockSyncQueues != null) {
+          mockSyncQueues!.putIfAbsent(targetUid, () => []).add(messageData);
+        } else if (Firebase.apps.isNotEmpty) {
+          final firestore = FirebaseFirestore.instance;
+          await firestore
+              .collection('sync_queues')
+              .doc(targetUid)
+              .collection('messages')
+              .doc(messageId)
+              .set({
+            ...messageData,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          AppLogger.warning('[SignalSessionManager] Dev mode: skipping Firestore secure message sync queue push (no Firebase, no mock).');
+        }
+        
+        break; // Success
+      } catch (e) {
+        final isPermissionDenied = e is FirebaseException && e.code == 'permission-denied' ||
+            e.toString().contains('permission-denied') ||
+            e.toString().contains('PERMISSION_DENIED');
+        if (isPermissionDenied && retryCount < 1 && Firebase.apps.isNotEmpty) {
+          retryCount++;
+          AppLogger.warning('[SignalSessionManager] sendSecureMessage permission denied. Retrying with fresh anonymous session.');
+          final auth = FirebaseAuth.instance;
+          try {
+            await auth.signOut();
+            await auth.signInAnonymously();
+          } catch (authError) {
+            AppLogger.error('[SignalSessionManager] Failed to re-authenticate anonymously: $authError');
+            rethrow;
+          }
+        } else {
+          rethrow;
+        }
+      }
     }
   }
 
@@ -807,6 +871,18 @@ class SignalSessionManager {
 
   /// Checks own Firestore prekey bundle and auto-replenishes OTPs if batch < 20
   Future<void> checkAndReplenishOneTimePrekeys() async {
+    if (Firebase.apps.isNotEmpty) {
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser == null) {
+        try {
+          await auth.signInAnonymously();
+        } catch (e) {
+          AppLogger.error('[SignalSessionManager] Failed to sign in anonymously for OTP replenishment: $e');
+          return;
+        }
+      }
+    }
+
     final currentUid = Firebase.apps.isEmpty
         ? 'bob_uid'
         : (FirebaseAuth.instance.currentUser?.uid ?? 'bob_uid');
@@ -845,9 +921,9 @@ class SignalSessionManager {
     if (Firebase.apps.isEmpty) return;
 
     final firestore = FirebaseFirestore.instance;
-    final bundleRef = firestore.collection('prekey_bundles').doc(currentUid);
 
-    try {
+    Future<void> runReplenish(String uid) async {
+      final bundleRef = firestore.collection('prekey_bundles').doc(uid);
       final doc = await bundleRef.get();
       if (!doc.exists) return;
 
@@ -885,8 +961,30 @@ class SignalSessionManager {
         });
         AppLogger.info('[SignalSessionManager] Successfully replenished 80 OTPs.');
       }
+    }
+
+    try {
+      await runReplenish(currentUid);
     } catch (e) {
-      AppLogger.error('[SignalSessionManager] OTP replenishment failed: $e');
+      final isPermissionDenied = e is FirebaseException && e.code == 'permission-denied' ||
+          e.toString().contains('permission-denied') ||
+          e.toString().contains('PERMISSION_DENIED');
+      if (isPermissionDenied && Firebase.apps.isNotEmpty) {
+        AppLogger.warning('[SignalSessionManager] OTP replenishment permission denied. Retrying with fresh anonymous session.');
+        try {
+          final auth = FirebaseAuth.instance;
+          await auth.signOut();
+          await auth.signInAnonymously();
+          final newUid = auth.currentUser?.uid;
+          if (newUid != null) {
+            await runReplenish(newUid);
+          }
+        } catch (retryError) {
+          AppLogger.error('[SignalSessionManager] OTP replenishment retry failed: $retryError');
+        }
+      } else {
+        AppLogger.error('[SignalSessionManager] OTP replenishment failed: $e');
+      }
     }
   }
 

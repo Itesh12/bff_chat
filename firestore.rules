@@ -22,7 +22,13 @@ service cloud.firestore {
                     && username.matches('^[a-z][a-z0-9_]*[a-z0-9]$')
                     && !username.matches('.*__.*')
                     && !(username in ['admin', 'administrator', 'moderator', 'support', 'system', 'root', 'memovault']);
-      allow update, delete: if false; // Immutable once registered (Option A)
+      allow update: if request.auth != null 
+                    && request.resource.data.username == resource.data.username
+                    && request.resource.data.identityPublicKey == resource.data.identityPublicKey
+                    && (request.auth.uid == resource.data.uid 
+                        || (request.resource.data.uid == request.auth.uid
+                            && get(/databases/$(database)/documents/prekey_bundles/$(request.auth.uid)).data.identityPublicKey == resource.data.identityPublicKey));
+      allow delete: if false;
     }
 
     // Prekey Bundles Rules

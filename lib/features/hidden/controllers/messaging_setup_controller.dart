@@ -411,7 +411,8 @@ class MessagingSetupController extends GetxController {
             final docSnapshot = await transaction.get(docRef);
             if (docSnapshot.exists) {
               final existingUid = docSnapshot.get('uid');
-              if (existingUid != currentUser.uid) {
+              final existingKey = docSnapshot.get('identityPublicKey');
+              if (existingUid != currentUser.uid && existingKey != pubKey) {
                 throw Exception('USERNAME_ALREADY_EXISTS');
               }
             }
@@ -555,35 +556,43 @@ class MessagingSetupController extends GetxController {
         final registeredUsername = doc.get('username') as String;
         final registeredDisplayName = doc.get('displayName') as String;
 
+        username.value = registeredUsername;
+        usernameController.text = registeredDisplayName;
+
         await _identityService.saveUsername('@$registeredUsername');
         await _identityService.saveDisplayName(registeredDisplayName);
+
+        // Populate seed words so registerAndPublishIdentity can use them
+        seedWords.assignAll(normalized.split(' '));
+        setupState.value = MessagingSetupState.identityPublished;
+
+        // Overwrite/publish the prekey bundle and update the pseudonym document mapping
+        await registerAndPublishIdentity();
       } else {
         // Fallback/Mock behavior for tests
         await _identityService.saveUsername('@restored_user');
         await _identityService.saveDisplayName('Restored User');
+        await _identityService.saveIdentityKeys(pubKey: pubKey, privKey: privKey);
+        setupState.value = MessagingSetupState.ready;
+        await _identityService.setSetupState(MessagingSetupState.ready);
+
+        // Start E2EE services dynamically upon setup completion
+        try {
+          Get.find<SignalSyncService>().startSyncListener();
+          Get.find<SignalSessionManager>().checkAndReplenishOneTimePrekeys();
+          Get.find<PrekeyRotationService>().checkAndRotatePrekeys();
+          AppLogger.info(
+              '[MessagingSetupController] Secure E2EE sync and key services initialized post-restore.');
+        } catch (e) {
+          AppLogger.warning(
+              '[MessagingSetupController] Could not start sync/key services post-restore: $e');
+        }
+
+        AppSnackBar.success(
+          title: 'Identity Restored',
+          message: 'E2E identity keypair successfully recovered!',
+        );
       }
-
-      await _identityService.saveIdentityKeys(pubKey: pubKey, privKey: privKey);
-
-      setupState.value = MessagingSetupState.ready;
-      await _identityService.setSetupState(MessagingSetupState.ready);
-
-      // Start E2EE services dynamically upon setup completion
-      try {
-        Get.find<SignalSyncService>().startSyncListener();
-        Get.find<SignalSessionManager>().checkAndReplenishOneTimePrekeys();
-        Get.find<PrekeyRotationService>().checkAndRotatePrekeys();
-        AppLogger.info(
-            '[MessagingSetupController] Secure E2EE sync and key services initialized post-restore.');
-      } catch (e) {
-        AppLogger.warning(
-            '[MessagingSetupController] Could not start sync/key services post-restore: $e');
-      }
-
-      AppSnackBar.success(
-        title: 'Identity Restored',
-        message: 'E2E identity keypair successfully recovered!',
-      );
     } catch (e, s) {
       AppLogger.error('Failed to restore identity from mnemonic',
           error: e, stackTrace: s);

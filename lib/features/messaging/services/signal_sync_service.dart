@@ -52,11 +52,21 @@ class SignalSyncService extends GetxService {
   void startSyncListener() async {
     if (Firebase.apps.isEmpty) return;
 
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUid == null) return;
-
     final isSetup = await _identityService.getSetupState();
     if (isSetup != MessagingSetupState.ready) return;
+
+    final auth = FirebaseAuth.instance;
+    if (auth.currentUser == null) {
+      try {
+        await auth.signInAnonymously();
+      } catch (e) {
+        AppLogger.error('[SignalSyncService] Failed to sign in anonymously: $e');
+        return;
+      }
+    }
+
+    final currentUid = auth.currentUser?.uid;
+    if (currentUid == null) return;
 
     stopSyncListener();
 
@@ -86,6 +96,22 @@ class SignalSyncService extends GetxService {
         } catch (e) {
           AppLogger.error('[SignalSyncService] Failed to process message ${doc.id}: $e');
         }
+      }
+    }, onError: (error) async {
+      final isPermissionDenied = error is FirebaseException && error.code == 'permission-denied' ||
+          error.toString().contains('permission-denied') ||
+          error.toString().contains('PERMISSION_DENIED');
+      if (isPermissionDenied) {
+        AppLogger.warning('[SignalSyncService] Sync listener permission denied. Retrying with fresh anonymous session.');
+        try {
+          await auth.signOut();
+          await auth.signInAnonymously();
+          startSyncListener();
+        } catch (e) {
+          AppLogger.error('[SignalSyncService] Failed to heal anonymous session: $e');
+        }
+      } else {
+        AppLogger.error('[SignalSyncService] Sync listener error: $error');
       }
     });
   }

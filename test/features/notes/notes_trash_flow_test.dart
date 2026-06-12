@@ -18,9 +18,12 @@ void main() {
       await db.close();
     });
 
-    test('Full Trash Lifecycle: Create -> Soft Delete -> Restore -> Trash -> Empty', () async {
+    test(
+        'Full Trash Lifecycle: Create -> Soft Delete -> Restore -> Trash -> Empty',
+        () async {
       // 1. Create note
-      final note = await repo.createNote(title: 'Trash Note 1', body: 'Trash Content');
+      final note =
+          await repo.createNote(title: 'Trash Note 1', body: 'Trash Content');
       final id = note.id;
 
       var activeList = await repo.watchAllNotes().first;
